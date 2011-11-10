@@ -6,7 +6,7 @@ client: client.o rpc.o
 server: server.o rpc.o 
 	g++ server.o server_functions.o server_function_skels.o librpc.a -o server
 
-binder: binder.o 
+binder: binder.o rpc.o
 	g++ binder.o librpc.a -o binder
 	
 client.o: client1.c
