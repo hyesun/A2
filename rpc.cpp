@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <string>
 
 #include <iostream>
 #include <vector>
@@ -163,6 +164,7 @@ int rpcInit()
 {
     printf("rpcInit\n");
 
+<<<<<<< HEAD
     //create connection socket for client
     clientfd = establish(CPORT);
     if (clientfd < 0)
@@ -170,6 +172,15 @@ int rpcInit()
         printf("establish error: %i\n", clientfd);
         return clientfd;
     }
+=======
+	//create connection socket for client
+//	clientfd = establish(CPORT);
+//    if (clientfd < 0)
+//    {
+//        printf("establish error: %i\n", clientfd);
+//        return clientfd;
+//    }
+>>>>>>> bf6064832fe5d13a621665757775e4ae9e55f0c7
 
     //open a connection to binder, for sending register request. keep this open
 
@@ -233,12 +244,26 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
 int rpcExecute()
 {
+<<<<<<< HEAD
     printf("rpcExecute\n");
     return 0;
+=======
+	int result=0;
+	pause();
+	printf("rpcExecute\n");
+	return result;
+>>>>>>> bf6064832fe5d13a621665757775e4ae9e55f0c7
 }
 
 int rpcTerminate()
 {
+<<<<<<< HEAD
     printf("rpcTerminate\n");
     return 0;
+=======
+	int result=0;
+
+	printf("rpcTerminate\n");
+	return result;
+>>>>>>> bf6064832fe5d13a621665757775e4ae9e55f0c7
 }
