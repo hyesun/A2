@@ -7,20 +7,52 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include <iostream>
+#include <vector>
+#include <string>
+
 #include "rpc.h"
 
-#define ADDRESS "stephen-Rev-1-0";
-#define BPORT   55555
-#define CPORT   55556
+//temp defines
+#define ADDRESS "hyesun-ubuntu";
+#define BPORT   3333
+#define CPORT   3334
+
+//perm defines
 #define BACKLOG 5       //max # of queued connects
 #define MAXHOSTNAME 100
+
+//global var
+int binder;
+int binderfd, clientfd;
+int port;
+char server_address[MAXHOSTNAME + 1];
+
+using namespace std;
+
+//message types
+enum message_type
+{
+    REGISTER,
+    LOC_REQUEST,
+    LOC_SUCCESS,
+    LOC_FAILURE
+};
+
+//message struct
+typedef struct
+{
+    int port;
+    string fn_name;
+    string ip_address;
+    int* argTypes;
+} message_sb;
 
 int establish(unsigned short portnum)
 {
     int sockfd, result;
     struct hostent *host;
     struct sockaddr_in my_addr;
-    char server_address[MAXHOSTNAME + 1];
 
     //get host info
     gethostname(server_address, MAXHOSTNAME);
@@ -57,16 +89,17 @@ int establish(unsigned short portnum)
     //read the allocated port number
     int length = sizeof(my_addr);
     getsockname(sockfd, (struct sockaddr*)&my_addr, (socklen_t*)&length);
+    port = ntohs(my_addr.sin_port);
 
     //print out the required env var
-    printf("SERVER_ADDRESS %s\n", server_address);
-    printf("SERVER_PORT %i\n", ntohs(my_addr.sin_port));
+    printf("BINDER_ADDRESS %s\n", server_address);
+    printf("BINDER_PORT %i\n", port);
 
     //listen for connections
     listen(sockfd, BACKLOG);
 
     //done
-    return (sockfd);
+    return sockfd;
 }
 
 int get_connection(int sockfd)
@@ -128,13 +161,10 @@ int call_socket(char *hostname, int portnum)
 
 int rpcInit()
 {
-	int result=0;
-	int clientfd, binderfd;
+    printf("rpcInit\n");
 
-	printf("rpcInit\n");
-
-	//create connection socket for client
-	clientfd = establish(CPORT);
+    //create connection socket for client
+    clientfd = establish(CPORT);
     if (clientfd < 0)
     {
         printf("establish error: %i\n", clientfd);
@@ -145,49 +175,70 @@ int rpcInit()
 
     //char* binder_address = getenv("BINDER_ADDRESS");
     //char* binder_port = getenv("BINDER_PORT");
-    char* binder_address = ADDRESS;
+    char* binder_address = (char*)ADDRESS;
     int binder_port=BPORT;
-
-    printf("binder address is: %s\n", binder_address);
-    printf("binder port is: %i\n", binder_port);
 
     //connect to the binder
     binderfd=call_socket(binder_address, binder_port);
-    printf("socketfd is %i\n", binderfd);
-
 
     printf("rpcInit done\n");
-	return result;
+    return 0;
 }
 
 int rpcCall(char* name, int* argTypes, void** args)
 {
-	int result=0;
-	
-	printf("rpcCall\n");
-	return result;
+    printf("rpcCall\n");
+    return 0;
 }
 
 int rpcRegister(char* name, int* argTypes, skeleton f)
 {
-	int result=0;
-	
-	printf("rpcRegister\n");
-	return result;
+    printf("rpcRegister\n");
+
+    //rpcRegister("f0", argTypes0, *f0_Skel);
+
+    //registers functions with binder
+    //call binder, inform this function is available
+    //0 returned for success registration
+
+    //count argtypes length
+    int arglen;
+    for(arglen=0;;arglen++)
+    {
+        if(*(argTypes+arglen) == 0)
+            break;
+    }
+    arglen++;
+
+    int msglen = arglen*4 + strlen(name) + 1 + strlen(server_address) + 1 + 4;
+    //int msglen = strlen(name) + 1 + strlen(server_address) + 1 + 4;
+    int msgtype = REGISTER;
+
+    //pack message
+    message_sb msg;
+    msg.port = port;
+    msg.fn_name = name;
+    msg.ip_address = server_address;
+    msg.argTypes = argTypes;
+
+    send(binderfd, name, 3, 0);
+
+    send(binderfd, (char*)&msglen, 4, 0);
+    send(binderfd, (char*)&msgtype, 4, 0);
+    send(binderfd, (char*)&msg, msglen, 0);
+
+    printf("rpcRegister done\n");
+    return 0;
 }
 
 int rpcExecute()
 {
-	int result=0;
-	
-	printf("rpcExecute\n");
-	return result;
+    printf("rpcExecute\n");
+    return 0;
 }
 
 int rpcTerminate()
 {
-	int result=0;
-	
-	printf("rpcTerminate\n");
-	return result;
+    printf("rpcTerminate\n");
+    return 0;
 }
