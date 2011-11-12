@@ -23,3 +23,5 @@ extern int rpcCall(char* name, int* argTypes, void** args);
 extern int rpcRegister(char* name, int* argTypes, skeleton f);
 extern int rpcExecute();
 extern int rpcTerminate();
+extern int establish(unsigned short portnum);
+extern int get_connection(int sockfd);

@@ -10,16 +10,16 @@ binder: binder.o rpc.o
 	g++ binder.o librpc.a -o binder
 	
 client.o: client1.c
-	gcc -g -c client1.c -o client.o
+	g++ -w -g -c client1.c -o client.o
 
 server.o: server.c server_functions.c server_function_skels.c
-	gcc -g -c server.c server_functions.c server_function_skels.c
+	g++ -w -g -c server.c server_functions.c server_function_skels.c
 
-binder.o: binder.c
-	gcc -g -c binder.c
+binder.o: binder.cpp
+	g++ -g -c binder.cpp
 
-rpc.o: rpc.c
-	gcc -g -c rpc.c
+rpc.o: rpc.cpp
+	g++ -g -c rpc.cpp
 	ar crf librpc.a rpc.o
 
 clean: 
