@@ -95,6 +95,7 @@ int main()
                     {
                         printf("i is listener\n");
                         newfd = accept(listener,NULL, NULL);
+                        cout << newfd << " is new socket" << endl;
 
                         if (newfd == -1)
                         {
@@ -111,8 +112,9 @@ int main()
                     }
                     else
                     {
-
-
+                        int status;
+                        char* buffer = (char*)malloc(100);
+                        status = recv(i, buffer, 100, 0);
 						//do shit here
                     	/*
                         if(status1 <= 0 )
@@ -120,8 +122,12 @@ int main()
                         	close(i); // bye!
                         	FD_CLR(i, &master); // remove from master set
                         }*/
-                    	close(i); // bye!
-                    	FD_CLR(i, &master); // remove from master set
+                        if(status <= 0 )
+                        {
+                          cout << "terminating:" << i << endl;
+                          close(i); // bye!
+                          FD_CLR(i, &master); // remove from master set
+                        }
                         //cleanup
                         //free(buffer);
                     } // END handle data from client
