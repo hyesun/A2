@@ -84,7 +84,7 @@ int main()
     //create connection socket for server
     FD_ZERO(&master);    // clear the master and temp sets
     FD_ZERO(&read_fds);
-    int listener = establish(PORT);
+    int listener = establish(SPORT);
     int newfd;        // newly accept()ed socket descriptor
     if (listener < 0)
     {
@@ -97,80 +97,79 @@ int main()
     int i;
     //multiplex
     for(;;)
+    {
+        counter++;
+        read_fds = master; // copy it
+        printf("here1!!\n");
+        if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1)
         {
-            counter++;
-            read_fds = master; // copy it
-            printf("here1!!\n");
-            if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1)
+            perror("select");
+            exit(4);
+        }
+        printf("here2!!\n");
+        // run through the existing connections looking for data to read
+        for(i = 0; i <= fdmax; i++)
+        {
+            if (FD_ISSET(i, &read_fds))
             {
-                perror("select");
-                exit(4);
-            }
-            printf("here2!!\n");
-            // run through the existing connections looking for data to read
-            for(i = 0; i <= fdmax; i++)
-            {
-                if (FD_ISSET(i, &read_fds))
+                // we got one!!
+                printf("we got one! i:%i\n", i);
+                if (i == listener)
                 {
-                    // we got one!!
-                    printf("we got one! i:%i\n", i);
-                    if (i == listener)
-                    {
-                        printf("i is listener\n");
-                        newfd = accept(listener,NULL, NULL);
-                        cout << newfd << " is new socket" << endl;
+                    printf("i is listener\n");
+                    newfd = accept(listener,NULL, NULL);
+                    cout << newfd << " is new socket" << endl;
 
-                        if (newfd == -1)
-                        {
-                            perror("accept");
-                        }
-                        else
-                        {
-                            FD_SET(newfd, &master); // add to master set
-                            if (newfd > fdmax)
-                            {    // keep track of the max
-                                fdmax = newfd;
-                            }
-                        }
+                    if (newfd == -1)
+                    {
+                        perror("accept");
                     }
                     else
                     {
-                        int status;
-                        char* buffer = (char*)malloc(100);
-                        status = recv(i, buffer, 100, 0);
-						//do shit here
-                    	/*
-                        if(status1 <= 0 )
-                        {
-                        	close(i); // bye!
-                        	FD_CLR(i, &master); // remove from master set
-                        }*/
-                        if(status <= 0 )
-                        {
-                          cout << "terminating:" << i << endl;
-                          close(i); // bye!
-                          FD_CLR(i, &master); // remove from master set
+                        FD_SET(newfd, &master); // add to master set
+                        if (newfd > fdmax)
+                        {    // keep track of the max
+                            fdmax = newfd;
                         }
-                        //cleanup
-                        //free(buffer);
-                    } // END handle data from client
-                } // END got new incoming connection
-            } // END looping through file descriptors
-        } // END for(;;)--and you thought it would never end!
+                    }
+                }
+                else
+                {
+                    int status;
+
+                    //accept function register calls from server
+                    int msglen;
+                    int msgtype;
+                    status = recv(i, (char*)&msglen, 4, 0);
+                    status = recv(i, (char*)&msgtype, 4, 0);
+
+                    message_sb msg;
+                    recv(i, (char*)&msg, msglen, 0);
+
+                    cout << "fn name is: " << msg.fn_name << endl;
+
+
+                    //do shit here
+                    /*
+                    if(status1 <= 0 )
+                    {
+                        close(i); // bye!
+                        FD_CLR(i, &master); // remove from master set
+                    }*/
+                    if(status <= 0 )
+                    {
+                      cout << "terminating:" << i << endl;
+                      close(i); // bye!
+                      FD_CLR(i, &master); // remove from master set
+                    }
+                    //cleanup
+                    //free(buffer);
+                } // END handle data from client
+            } // END got new incoming connection
+        } // END looping through file descriptors
+    } // END for(;;)--and you thought it would never end!
     //create arrays
 	
-
-	//accept function register calls from server
-    int msglen;
-    int msgtype;
-    recv(i, (char*)&msglen, 4, 0);
-    recv(i, (char*)&msgtype, 4, 0);
-
-	message_sb msg;
-	recv(i, (char*)&msg, msglen, 0);
-
-    cout << "fn name is: " << msg.fn_name << endl;
-
     printf("binder done\n");
     return 0;
 }
