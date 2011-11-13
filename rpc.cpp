@@ -1,35 +1,34 @@
+using namespace std;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string>
-
 #include <iostream>
 #include <vector>
 #include <string>
-
 #include "rpc.h"
+
+//perm defines
+#define BACKLOG 5       //max # of queued connects
+#define MAXHOSTNAME 20  //"hyesun-ubuntu"
+#define MAXFNNAME 2     //"f0"
+#define s_char 1        //size of char in bytes
+#define s_int 4         //size of int in bytes
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu";
 #define BPORT   3333
 #define CPORT   3334
 
-//perm defines
-#define BACKLOG 5       //max # of queued connects
-#define MAXHOSTNAME 100
-
-//global var
+//global variables
 int binder;
 int binderfd, clientfd;
 int port;
 char server_address[MAXHOSTNAME + 1];
-
-using namespace std;
 
 //message types
 enum message_type
@@ -40,14 +39,7 @@ enum message_type
     LOC_FAILURE
 };
 
-//message struct
-typedef struct
-{
-    int port;
-    string fn_name;
-    string ip_address;
-    int* argTypes;
-} message_sb;
+// helper functions
 
 int establish(unsigned short portnum)
 {
@@ -160,6 +152,8 @@ int call_socket(char *hostname, int portnum)
     return sockfd;
 }
 
+// main functions
+
 int rpcInit()
 {
     printf("rpcInit\n");
@@ -204,37 +198,29 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 {
     printf("rpcRegister\n");
 
-    //rpcRegister("f0", argTypes0, *f0_Skel);
-
-    //registers functions with binder
-    //call binder, inform this function is available
-    //0 returned for success registration
-
-    //count argtypes length
-    int arglen;
-    for(arglen=0;;arglen++)
+    //count argTypes length
+    int argTypesLen = 0;
+    while(*(argTypes+argTypesLen) != 0)
     {
-        if(*(argTypes+arglen) == 0)
-            break;
+        argTypesLen++;
     }
-    arglen++;
+    argTypesLen++;
 
-    int msglen = arglen*4 + strlen(name) + 1 + strlen(server_address) + 1 + 4;
-    //int msglen = strlen(name) + 1 + strlen(server_address) + 1 + 4;
+    //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
+    int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+s_char + argTypesLen*s_int;
+
+    //type of message is REGISTER
     int msgtype = REGISTER;
 
-    //pack message
-    message_sb msg;
-    msg.port = port;
-    msg.fn_name = name;
-    msg.ip_address = server_address;
-    msg.argTypes = argTypes;
+    //first two bytes are always length and type
+    send(binderfd, &msglen, sizeof(msglen), 0);
+    send(binderfd, &msgtype, sizeof(msgtype), 0);
 
-    send(binderfd, name, 3, 0);
-
-    send(binderfd, (char*)&msglen, 4, 0);
-    send(binderfd, (char*)&msgtype, 4, 0);
-    send(binderfd, (char*)&msg, msglen, 0);
+    //send the four components of the message (DON'T do sizeof() for name and argTypes)
+    send(binderfd, server_address, sizeof(server_address), 0);
+    send(binderfd, &port, sizeof(port), 0);
+    send(binderfd, name, MAXFNNAME+s_char, 0);
+    send(binderfd, argTypes, argTypesLen*s_int, 0);
 
     printf("rpcRegister done\n");
     return 0;
