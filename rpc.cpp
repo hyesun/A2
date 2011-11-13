@@ -22,9 +22,10 @@ using namespace std;
 #define FAILURE -1
 
 //temp defines
-#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
-#define BPORT   3333
-#define CPORT   3334
+//#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
+#define ADDRESS "stephen-Rev-1-0" //
+#define BPORT   33333
+#define CPORT   33334
 
 //message types
 enum message_type
@@ -169,12 +170,12 @@ int rpcInit()
     printf("rpcInit\n");
 
     //create connection socket for client
-    clientfd = establish(CPORT);
-    if (clientfd < 0)
-    {
-        printf("establish error: %i\n", clientfd);
-        return clientfd;
-    }
+//    clientfd = establish(CPORT);
+//    if (clientfd < 0)
+//    {
+//        printf("establish error: %i\n", clientfd);
+//        return clientfd;
+//    }
 
     //open a connection to binder, for sending register request. keep this open
 
@@ -259,10 +260,13 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     record.fn_skel=f;
     database.push_back(record);
 
+
     //read back the record
     for(int i=0; i<database.size(); i++)
     {
-        printf("database entry [%i]: %s, %#x\n", i, database[i].fn_name, (unsigned int)database[i].fn_skel);
+        int (*pf)(int*, void**);
+        pf = database[i].fn_skel;
+        printf("database entry [%i]: %s, %p\n", i, database[i].fn_name, pf);
     }
 
     printf("rpcRegister done\n");
@@ -271,6 +275,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
 int rpcExecute()
 {
+    pause();
     printf("rpcExecute\n");
     return SUCCESS;
 }
