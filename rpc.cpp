@@ -18,17 +18,13 @@ using namespace std;
 #define MAXFNNAME 2     //"f0"
 #define s_char 1        //size of char in bytes
 #define s_int 4         //size of int in bytes
+#define SUCCESS  0
+#define FAILURE -1
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu";
 #define BPORT   3333
 #define CPORT   3334
-
-//global variables
-int binder;
-int binderfd, clientfd;
-int port;
-char server_address[MAXHOSTNAME + 1];
 
 //message types
 enum message_type
@@ -38,6 +34,20 @@ enum message_type
     LOC_SUCCESS,
     LOC_FAILURE
 };
+
+//local database for server
+typedef struct
+{
+    char fn_name[MAXFNNAME+1];
+    skeleton fn_skel;
+}dataentry;
+
+//global variables
+int binder;
+int binderfd, clientfd;
+int port;
+char server_address[MAXHOSTNAME + 1];
+vector<dataentry> database;
 
 // helper functions
 
@@ -166,14 +176,6 @@ int rpcInit()
         return clientfd;
     }
 
-	//create connection socket for client
-    //	clientfd = establish(CPORT);
-    //    if (clientfd < 0)
-    //    {
-    //        printf("establish error: %i\n", clientfd);
-    //        return clientfd;
-    //    }
-
     //open a connection to binder, for sending register request. keep this open
 
     //char* binder_address = getenv("BINDER_ADDRESS");
@@ -183,6 +185,11 @@ int rpcInit()
 
     //connect to the binder
     binderfd=call_socket(binder_address, binder_port);
+    if (binderfd < 0)
+    {
+        printf("call socket error: %i\n", binderfd);
+        return binderfd;
+    }
 
     printf("rpcInit done\n");
     return 0;
@@ -212,15 +219,40 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     //type of message is REGISTER
     int msgtype = REGISTER;
 
+    //for checking send success
+    int checksum = msglen + sizeof(msglen) + sizeof(msgtype);
+
     //first two bytes are always length and type
-    send(binderfd, &msglen, sizeof(msglen), 0);
-    send(binderfd, &msgtype, sizeof(msgtype), 0);
+    checksum-=send(binderfd, &msglen, sizeof(msglen), 0);
+    checksum-=send(binderfd, &msgtype, sizeof(msgtype), 0);
 
     //send the four components of the message (DON'T do sizeof() for name and argTypes)
-    send(binderfd, server_address, sizeof(server_address), 0);
-    send(binderfd, &port, sizeof(port), 0);
-    send(binderfd, name, MAXFNNAME+s_char, 0);
-    send(binderfd, argTypes, argTypesLen*s_int, 0);
+    checksum-=send(binderfd, server_address, sizeof(server_address), 0);
+    checksum-=send(binderfd, &port, sizeof(port), 0);
+    checksum-=send(binderfd, name, MAXFNNAME+s_char, 0);
+    checksum-=send(binderfd, argTypes, argTypesLen*s_int, 0);
+
+    //make sure everything was successful
+    if (checksum != 0)
+    {
+        printf("ERROR in rpcRegister()\n");
+        return -1;
+    }
+
+    //double check with binder
+
+
+    //record this function in local database
+    dataentry record;
+    strncpy(record.fn_name, name, 3);
+    record.fn_skel=f;
+    database.push_back(record);
+
+    //read back the record
+    for(int i=0; i<database.size(); i++)
+    {
+        printf("database entry [%i]: %s, %#x\n", i, database[i].fn_name, (unsigned int)database[i].fn_skel);
+    }
 
     printf("rpcRegister done\n");
     return 0;
