@@ -20,8 +20,6 @@ using namespace std;
 #define MAX_NUM_REGISTERS 100
 
 //temp defines
-//#define ADDRESS "hyesun-ubuntu"
-#define ADDRESS "stephen-Rev-1-0"
 #define SPORT   3333
 #define CPORT   3334
 

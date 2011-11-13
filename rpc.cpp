@@ -22,8 +22,7 @@ using namespace std;
 #define FAILURE -1
 
 //temp defines
-//#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
-#define ADDRESS "stephen-Rev-1-0"
+#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
 #define BPORT   3333
 #define CPORT   3334
 
