@@ -243,7 +243,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     //double check with binder to make sure it was successful
     int reply=FAILURE;
     checksum=recv(binderfd, &reply, sizeof(reply), 0);
-    if (checksum != 0)
+    if (checksum != sizeof(reply))
     {
         printf("ERROR in rpcRegister()\n");
         return FAILURE;
