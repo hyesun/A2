@@ -248,7 +248,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
         printf("ERROR in rpcRegister()\n");
         return FAILURE;
     }
-    if(a != SUCCESS)
+    if(reply != SUCCESS)
     {
         printf("ERROR in rpcRegister()\n");
         return FAILURE;
