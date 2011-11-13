@@ -15,8 +15,8 @@
 #include "rpc.h"
 
 //temp defines
-#define ADDRESS "hyesun-ubuntu";
-#define BPORT   3333
+#define ADDRESS "stephen-Rev-1-0";
+#define BPORT   50000
 #define CPORT   3334
 
 //perm defines
@@ -43,10 +43,10 @@ enum message_type
 //message struct
 typedef struct
 {
-    int port;
+    char* port;
     string fn_name;
     string ip_address;
-    int* argTypes;
+    //int* argTypes;
 } message_sb;
 
 int establish(unsigned short portnum)
@@ -225,10 +225,12 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
     //pack message
     message_sb msg;
-    msg.port = port;
+    msg.port = serialize(port);
     msg.fn_name = name;
     msg.ip_address = server_address;
-    msg.argTypes = argTypes;
+    //msg.argTypes = argTypes;
+
+    cout << "function name: " << name << endl;
 
     send(binderfd, name, 3, 0);
 
@@ -238,6 +240,18 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
     printf("rpcRegister done\n");
     return 0;
+}
+
+char* serialize(int a)
+{
+    cout << "here1" << endl;
+    char temp[4];
+    temp[0] = a >> 24;
+    temp[1] = a >> 16;
+    temp[2] = a >> 8;
+    temp[3] = a;
+    cout << "here2" << endl;
+    return temp;
 }
 
 int rpcExecute()

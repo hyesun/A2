@@ -14,8 +14,8 @@
 #include <vector>
 #include <string>
 
-#define ADDRESS "hyesun-ubuntu";
-#define SPORT   3333
+#define ADDRESS "stephen-Rev-1-0";
+#define SPORT   50000
 #define CPORT   3334
 #define BACKLOG 5       //max # of queued connects
 #define MAXHOSTNAME 100
@@ -138,15 +138,19 @@ int main()
                     int status;
 
                     //accept function register calls from server
+                    char* name;
                     int msglen;
                     int msgtype;
+                    status = recv(i, name, 3, 0);
+                    cout << "fn name is: " << (string)name<< endl;
                     status = recv(i, (char*)&msglen, 4, 0);
                     status = recv(i, (char*)&msgtype, 4, 0);
 
+                    cout << "kk: " << (string)name<< endl;
                     message_sb msg;
                     recv(i, (char*)&msg, msglen, 0);
+                    cout << "kkoo: " << (string)msg.fn_name<< endl;
 
-                    cout << "fn name is: " << msg.fn_name << endl;
 
 
                     //do shit here
