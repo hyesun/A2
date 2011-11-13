@@ -64,7 +64,7 @@ int establish(unsigned short portnum)
     if (host == NULL)
     {
         printf("gethost error\n");
-        return -1;
+        return FAILURE;
     }
 
     //config socket
@@ -133,7 +133,7 @@ int call_socket(char *hostname, int portnum)
     if (host == NULL)
     {
         printf("gethost error\n");
-        return -1;
+        return FAILURE;
     }
 
     //config socket
@@ -193,13 +193,13 @@ int rpcInit()
     }
 
     printf("rpcInit done\n");
-    return 0;
+    return SUCCESS;
 }
 
 int rpcCall(char* name, int* argTypes, void** args)
 {
     printf("rpcCall\n");
-    return 0;
+    return SUCCESS;
 }
 
 int rpcRegister(char* name, int* argTypes, skeleton f)
@@ -237,11 +237,22 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     if (checksum != 0)
     {
         printf("ERROR in rpcRegister()\n");
-        return -1;
+        return FAILURE;
     }
 
-    //double check with binder
-
+    //double check with binder to make sure it was successful
+    int reply=FAILURE;
+    checksum=recv(binderfd, &reply, sizeof(reply), 0);
+    if (checksum != 0)
+    {
+        printf("ERROR in rpcRegister()\n");
+        return FAILURE;
+    }
+    if(a != SUCCESS)
+    {
+        printf("ERROR in rpcRegister()\n");
+        return FAILURE;
+    }
 
     //record this function in local database
     dataentry record;
@@ -256,17 +267,17 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     }
 
     printf("rpcRegister done\n");
-    return 0;
+    return SUCCESS;
 }
 
 int rpcExecute()
 {
     printf("rpcExecute\n");
-    return 0;
+    return SUCCESS;
 }
 
 int rpcTerminate()
 {
     printf("rpcTerminate\n");
-    return 0;
+    return SUCCESS;
 }
