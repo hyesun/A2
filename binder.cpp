@@ -170,7 +170,7 @@ int main()
                       status = recv(socketfd, &msgtype, sizeof(msgtype), 0);
 
                     //check msgtype to see if from server
-                    if (msgtype == REGISTER)
+                    if (msgtype == REGISTER && status > 0)
                     {
                       server_register(socketfd,msglen);
                     }
