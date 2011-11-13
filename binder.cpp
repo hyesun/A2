@@ -46,6 +46,7 @@ int function()
 
 int server_register(int socketfd, int msglen)
 {
+  int success = SUCCESS;
   char server_address[MAXHOSTNAME+1];
   int port;
   char fn_name[MAXFNNAME+1];
@@ -60,7 +61,7 @@ int server_register(int socketfd, int msglen)
   checksum -= recv(socketfd, argType, argTypesLen, 0);
 
   if (checksum != 0)
-    return -1;
+    success = FAILURE;
   data_point a;
   a.server_address = server_address;
   a.port = port;
@@ -68,7 +69,7 @@ int server_register(int socketfd, int msglen)
   a.argType = argType;
   a.argTypesLen = argTypesLen;
   DataBase.push_back(a);
-  return 1;
+  send(socketfd, &success, sizeof(success), 0);
   //pause here so we can check output
   //getchar();
 }
@@ -154,6 +155,7 @@ int main()
                 else
                 {
                     int status;
+                    int success;
 
                     cout << endl << endl << "-------accept fn reg calls-----" << endl << endl;
 
@@ -170,8 +172,7 @@ int main()
                     //check msgtype to see if from server
                     if (msgtype == REGISTER)
                     {
-                      if (server_register(socketfd,msglen) == 1);
-                        send()
+                      server_register(socketfd,msglen);
                     }
 
                     //get message variable ready
