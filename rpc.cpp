@@ -20,7 +20,8 @@ using namespace std;
 #define s_int 4         //size of int in bytes
 
 //temp defines
-#define ADDRESS "hyesun-ubuntu";
+//#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
+#define ADDRESS "stephen-Rev-1-0"
 #define BPORT   3333
 #define CPORT   3334
 

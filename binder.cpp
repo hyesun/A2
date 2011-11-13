@@ -20,22 +20,57 @@ using namespace std;
 #define MAX_NUM_REGISTERS 100
 
 //temp defines
-#define ADDRESS "hyesun-ubuntu";
+//#define ADDRESS "hyesun-ubuntu"
+#define ADDRESS "stephen-Rev-1-0"
 #define SPORT   3333
 #define CPORT   3334
 
 //message struct
 typedef struct
 {
-	string procedure;
-	string location;
+        string server_address;
+        int port;
+	string fn_name;
+	unsigned int* argType;
+	int argTypesLen;
 }data_point;
+
+vector<data_point> DataBase;
 
 //helper functions
 
 int function()
 {
     return 0;
+}
+
+int server_register(int socketfd, int msglen)
+{
+  char server_address[MAXHOSTNAME+1];
+  int port;
+  char fn_name[MAXFNNAME+1];
+  int argTypesLen = msglen-sizeof(server_address)-sizeof(port)-sizeof(fn_name); //yes
+  unsigned int* argType = (unsigned int*)malloc(argTypesLen);
+
+  //receive the message
+  int checksum = msglen;
+  checksum -= recv(socketfd, server_address, sizeof(server_address), 0);
+  checksum -= recv(socketfd, &port, sizeof(port), 0);
+  checksum -= recv(socketfd, fn_name, sizeof(fn_name), 0);
+  checksum -= recv(socketfd, argType, argTypesLen, 0);
+
+  if (checksum != 0)
+    return -1;
+  data_point a;
+  a.server_address = server_address;
+  a.port = port;
+  a.fn_name = fn_name;
+  a.argType = argType;
+  a.argTypesLen = argTypesLen;
+  DataBase.push_back(a);
+  return 1;
+  //pause here so we can check output
+  //getchar();
 }
 
 //main function
@@ -79,27 +114,25 @@ int main()
     FD_SET(listener, &master);
     fdmax = listener; // so far, it's this one
     int counter=0;
-    int i;
+    int socketfd;
     //multiplex
     for(;;)
     {
         counter++;
         read_fds = master; // copy it
-        printf("here1!!\n");
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1)
         {
             perror("select");
             exit(4);
         }
-        printf("here2!!\n");
         // run through the existing connections looking for data to read
-        for(i = 0; i <= fdmax; i++)
+        for(socketfd = 0; socketfd <= fdmax; socketfd++)
         {
-            if (FD_ISSET(i, &read_fds))
+            if (FD_ISSET(socketfd, &read_fds))
             {
                 // we got one!!
-                printf("we got one! i:%i\n", i);
-                if (i == listener)
+                printf("we got one! i:%i\n", socketfd);
+                if (socketfd == listener)
                 {
                     printf("i is listener\n");
                     newfd = accept(listener,NULL, NULL);
@@ -122,57 +155,70 @@ int main()
                 {
                     int status;
 
-
                     cout << endl << endl << "-------accept fn reg calls-----" << endl << endl;
 
                     //get first 8 bytes
                     int msglen;
                     int msgtype;
-                    recv(i, &msglen, sizeof(msglen), 0);
-                    recv(i, &msgtype, sizeof(msgtype), 0);
 
-                    //get message variable ready
-                    char server_address[MAXHOSTNAME+1];
-                    int port;
-                    char fn_name[MAXFNNAME+1];
-                    int argTypesLen = msglen-sizeof(server_address)-sizeof(port)-sizeof(fn_name); //yes
-                    unsigned int* argType = (unsigned int*)malloc(argTypesLen);
 
-                    //receive the message
-                    recv(i, server_address, sizeof(server_address), 0);
-                    recv(i, &port, sizeof(port), 0);
-                    recv(i, fn_name, sizeof(fn_name), 0);
-                    recv(i, argType, argTypesLen, 0);
 
-                    cout << "msglen: " << msglen << endl;
-                    cout << "msgtype: " << msgtype << endl;
-                    cout << "address: " << server_address << endl;
-                    cout << "port: " << port << endl;
-                    cout << "fn name: " << fn_name << endl;
+                    status = recv(socketfd, &msglen, sizeof(msglen), 0);
+                    if (status > 0)
+                      status = recv(socketfd, &msgtype, sizeof(msgtype), 0);
 
-                    for(int j=0; j<argTypesLen/sizeof(int); j++)
+                    //check msgtype to see if from server
+                    if (msgtype == REGISTER)
                     {
-                        cout << "argType[" << j << "]=" << argType[j] << endl;
+                      if (server_register(socketfd,msglen) == 1);
+                        send()
                     }
 
-                    cout << endl << endl << "-------------------------------" << endl << endl;
-
-                    //pause here so we can check output
-                    getchar();
-
-                    //do shit here
-                    /*
-                    if(status1 <= 0 )
-                    {
-                        close(i); // bye!
-                        FD_CLR(i, &master); // remove from master set
-                    }*/
+                    //get message variable ready
+//                    char server_address[MAXHOSTNAME+1];
+//                    int port;
+//                    char fn_name[MAXFNNAME+1];
+//                    int argTypesLen = msglen-sizeof(server_address)-sizeof(port)-sizeof(fn_name); //yes
+//                    unsigned int* argType = (unsigned int*)malloc(argTypesLen);
+//
+//                    //receive the message
+//                    recv(socketfd, server_address, sizeof(server_address), 0);
+//                    recv(socketfd, &port, sizeof(port), 0);
+//                    recv(socketfd, fn_name, sizeof(fn_name), 0);
+//                    recv(socketfd, argType, argTypesLen, 0);
+//
+//                    cout << "msglen: " << msglen << endl;
+//                    cout << "msgtype: " << msgtype << endl;
+//                    cout << "address: " << server_address << endl;
+//                    cout << "port: " << port << endl;
+//                    cout << "fn name: " << fn_name << endl;
+//
+//                    for(int j=0; j<argTypesLen/sizeof(int); j++)
+//                    {
+//                        cout << "argType[" << j << "]=" << argType[j] << endl;
+//                    }
+//
+//                    cout << endl << endl << "-------------------------------" << endl << endl;
+//
+//                    //pause here so we can check output
+//                    getchar();
 
                     if(status <= 0 )
                     {
-                      cout << "terminating:" << i << endl;
-                      close(i); // bye!
-                      FD_CLR(i, &master); // remove from master set
+                      for (int i=0; i< DataBase.size(); i++)
+                      {
+                        cout << i << endl;
+                        cout << "address: " << DataBase[i].server_address << endl;
+                        cout << "port: " << DataBase[i].port << endl;
+                        cout << "fn name: " << DataBase[i].fn_name << endl;
+                        for(int j=0; j<DataBase[i].argTypesLen/sizeof(int); j++)
+                        {
+                            cout << "argType[" << j << "]=" << DataBase[i].argType[j] << endl;
+                        }
+                      }
+                      cout << "terminating:" << socketfd << endl;
+                      close(socketfd); // bye!
+                      FD_CLR(socketfd, &master); // remove from master set
                     }
                     //cleanup
                     //free(buffer);
