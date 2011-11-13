@@ -1,50 +1,28 @@
+using namespace std;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <pthread.h>
-
-#include "rpc.h"
 #include <iostream>
-
 #include <vector>
 #include <string>
+#include "rpc.h"
+#include "rpc.cpp"
 
-#define ADDRESS "stephen-Rev-1-0";
-#define SPORT   50000
-#define CPORT   3334
-#define BACKLOG 5       //max # of queued connects
-#define MAXHOSTNAME 100
-
+//perm defines
 #define NUMTHREADS 2
 #define SERVER_THREAD 0
 #define CLIENT_THREAD 1
-
 #define MAX_NUM_REGISTERS 100
 
-using namespace std;
-
-//message types
-enum message_type
-{
-    REGISTER,
-    LOC_REQUEST,
-    LOC_SUCCESS,
-    LOC_FAILURE
-};
-
-//message struct
-typedef struct
-{
-    int port;
-    string fn_name;
-    string ip_address;
-    int* argTypes;
-} message_sb;
+//temp defines
+#define ADDRESS "hyesun-ubuntu";
+#define SPORT   3333
+#define CPORT   3334
 
 //message struct
 typedef struct
@@ -53,6 +31,14 @@ typedef struct
 	string location;
 }data_point;
 
+//helper functions
+
+int function()
+{
+    return 0;
+}
+
+//main function
 int main()
 {
     printf("binder\n");
@@ -75,7 +61,6 @@ int main()
       cout << i << "  location:" << testing[i].location
           << " procedure:" << testing[i].procedure << endl;
     }*/
-
 
     fd_set master;    // master file descriptor list
     fd_set read_fds;  // temp file descriptor list for select()
@@ -137,21 +122,43 @@ int main()
                 {
                     int status;
 
-                    //accept function register calls from server
-                    char* name;
+
+                    cout << endl << endl << "-------accept fn reg calls-----" << endl << endl;
+
+                    //get first 8 bytes
                     int msglen;
                     int msgtype;
-                    status = recv(i, name, 3, 0);
-                    cout << "fn name is: " << (string)name<< endl;
-                    status = recv(i, (char*)&msglen, 4, 0);
-                    status = recv(i, (char*)&msgtype, 4, 0);
+                    recv(i, &msglen, sizeof(msglen), 0);
+                    recv(i, &msgtype, sizeof(msgtype), 0);
 
-                    cout << "kk: " << (string)name<< endl;
-                    message_sb msg;
-                    recv(i, (char*)&msg, msglen, 0);
-                    cout << "kkoo: " << (string)msg.fn_name<< endl;
+                    //get message variable ready
+                    char server_address[MAXHOSTNAME+1];
+                    int port;
+                    char fn_name[MAXFNNAME+1];
+                    int argTypesLen = msglen-sizeof(server_address)-sizeof(port)-sizeof(fn_name); //yes
+                    unsigned int* argType = (unsigned int*)malloc(argTypesLen);
 
+                    //receive the message
+                    recv(i, server_address, sizeof(server_address), 0);
+                    recv(i, &port, sizeof(port), 0);
+                    recv(i, fn_name, sizeof(fn_name), 0);
+                    recv(i, argType, argTypesLen, 0);
 
+                    cout << "msglen: " << msglen << endl;
+                    cout << "msgtype: " << msgtype << endl;
+                    cout << "address: " << server_address << endl;
+                    cout << "port: " << port << endl;
+                    cout << "fn name: " << fn_name << endl;
+
+                    for(int j=0; j<argTypesLen/sizeof(int); j++)
+                    {
+                        cout << "argType[" << j << "]=" << argType[j] << endl;
+                    }
+
+                    cout << endl << endl << "-------------------------------" << endl << endl;
+
+                    //pause here so we can check output
+                    getchar();
 
                     //do shit here
                     /*
@@ -160,6 +167,7 @@ int main()
                         close(i); // bye!
                         FD_CLR(i, &master); // remove from master set
                     }*/
+
                     if(status <= 0 )
                     {
                       cout << "terminating:" << i << endl;
