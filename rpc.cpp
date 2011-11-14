@@ -52,7 +52,7 @@ vector<dataentry> database;
 
 // helper functions
 
-int establish(unsigned short portnum)
+int establish(unsigned short portnum, int binder)
 {
     int sockfd, result;
     struct hostent *host;
@@ -96,20 +96,23 @@ int establish(unsigned short portnum)
     port = ntohs(my_addr.sin_port);
 
     //print out the required env var
-    if (port != 0)
+    if (binder)
     {
-      printf("SERVER_ADDRESS %s\n", server_address);
+      printf("BINDER_ADDRESS %s\n", server_address);
       printf("BINDER_PORT\n", port);
 
     }
-    printf("SERVER_ADDRESS %s\n", server_address);
-    printf("SERVER_PORT %i\n", port);
 
     //listen for connections
     listen(sockfd, BACKLOG);
 
     //done
     return sockfd;
+}
+
+int establish(unsigned short portnum)
+{
+    return establish(portnum, 0);   //server by default
 }
 
 int get_connection(int sockfd)
@@ -176,7 +179,7 @@ int rpcInit()
     printf("rpcInit\n");
 
     //create connection socket for client
-    clientfd = establish(SPORT);
+    clientfd = establish(SPORT, 0);
     if (clientfd < 0)
     {
         printf("establish error: %i\n", clientfd);
