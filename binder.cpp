@@ -90,59 +90,62 @@ void binder_lookup(int socketfd, int msglen)
     checksum -= recv(socketfd, fn_name, sizeof(fn_name), 0);
     checksum -= recv(socketfd, argType, argTypesLen, 0);
 
-    cout << "binder side (got request): fn request: " << fn_name << endl;
-
-    for(int j=0; j<argTypesLen/sizeof(int); j++)
+    if (checksum == 0)
     {
-        cout << "binder side (got request):argType[" << j << "]=" << argType[j] << endl;
-    }
+        cout << "binder side (got request): fn request: " << fn_name << endl;
 
-    int found = FAILURE;
-    int index_found = -1;
-    //lookup
-    for(int i=0; i< DataBase.size(); i++)
-    {
-        if(fn_name == DataBase[i].fn_name)
+        for(int j=0; j<argTypesLen/sizeof(int); j++)
         {
-            index_found = i;
-            found = SUCCESS;
-            for(int j=0; j< argTypesLen/sizeof(int); j++)
+            cout << "binder side (got request):argType[" << j << "]=" << argType[j] << endl;
+        }
+
+        int found = FAILURE;
+        int index_found = -1;
+        //lookup
+        for(int i=0; i< DataBase.size(); i++)
+        {
+            if(fn_name == DataBase[i].fn_name)
             {
-                if (argType[j] != DataBase[index_found].argType[j])
-                    found = FAILURE;
+                index_found = i;
+                found = SUCCESS;
+                for(int j=0; j< argTypesLen/sizeof(int); j++)
+                {
+                    if (argType[j] != DataBase[index_found].argType[j])
+                        found = FAILURE;
+                }
             }
         }
-    }
 
-    if (found == SUCCESS)
-    {
-        cout << "SERVER FUNCTION FOUND" << endl;
-        const char* server_address = DataBase[index_found].server_address.c_str();
-        int port = DataBase[index_found].port;
-        int sendmsglen = sizeof(server_address) + sizeof(port);
-        int sendmsgtype = LOC_SUCCESS;
-        int sendchecksum = sendmsglen + sizeof(sendmsgtype) + sizeof(sendmsglen);
-
-        sendchecksum-=send(socketfd, &sendmsglen, sizeof(sendmsglen), 0);
-        sendchecksum-=send(socketfd, &sendmsgtype, sizeof(sendmsgtype), 0);
-        sendchecksum-=send(socketfd, server_address, MAXHOSTNAME + 1, 0);
-        sendchecksum-=send(socketfd, &port, sizeof(port), 0);
-        cout << "msglen: " << sendmsglen << endl;
-        cout << "sendmsgtype: " << sendmsgtype << endl;
-        cout << "address: " << server_address << endl;
-        cout << "port: " << port << endl;
-
-        if (checksum !=0)
+        if (found == SUCCESS)
         {
-            cout << "Error sending back LOC SUCCESS" << endl;
-        }
+            cout << "SERVER FUNCTION FOUND" << endl;
+            const char* server_address = DataBase[index_found].server_address.c_str();
+            int port = DataBase[index_found].port;
+            int sendmsglen = sizeof(server_address) + sizeof(port);
+            int sendmsgtype = LOC_SUCCESS;
+            int sendchecksum = sendmsglen + sizeof(sendmsgtype) + sizeof(sendmsglen);
 
-    }
-    else
-    {
-      int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
-      int msgtype = LOC_FAILURE;
-      int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
+            sendchecksum-=send(socketfd, &sendmsglen, sizeof(sendmsglen), 0);
+            sendchecksum-=send(socketfd, &sendmsgtype, sizeof(sendmsgtype), 0);
+            sendchecksum-=send(socketfd, server_address, MAXHOSTNAME + 1, 0);
+            sendchecksum-=send(socketfd, &port, sizeof(port), 0);
+            cout << "msglen: " << sendmsglen << endl;
+            cout << "sendmsgtype: " << sendmsgtype << endl;
+            cout << "address: " << server_address << endl;
+            cout << "port: " << port << endl;
+
+            if (checksum !=0)
+            {
+                cout << "Error sending back LOC SUCCESS" << endl;
+            }
+
+        }
+        else
+        {
+          int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
+          int msgtype = LOC_FAILURE;
+          int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
+        }
     }
 
 }
@@ -225,7 +228,6 @@ int main()
                     }
                     else if (msgtype == LOC_REQUEST)
                     {
-                      cout << "LOCQUEST" << endl;
                       binder_lookup(socketfd, msglen);
                     }
 

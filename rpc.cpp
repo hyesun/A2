@@ -254,7 +254,7 @@ int rpcCall(char* name, int* argTypes, void** args)
 
         }
     }
-
+    close(binderfd);
     printf("rpcCall\n");
     return SUCCESS;
 }
