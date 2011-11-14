@@ -22,8 +22,7 @@ using namespace std;
 #define FAILURE -1
 
 //temp defines
-//#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
-#define ADDRESS "stephen-Rev-1-0" //
+#define ADDRESS "hyesun-ubuntu"
 #define BPORT   33335
 #define SPORT   0
 
@@ -98,8 +97,8 @@ int establish(unsigned short portnum, int binder)
     //print out the required env var
     if (binder)
     {
-      printf("BINDER_ADDRESS %s\n", server_address);
-      printf("BINDER_PORT\n", port);
+      printf("SERVER_ADDRESS %s\n", server_address);
+      printf("BINDER_PORT %i\n", port);
 
     }
 
@@ -108,11 +107,6 @@ int establish(unsigned short portnum, int binder)
 
     //done
     return sockfd;
-}
-
-int establish(unsigned short portnum)
-{
-    return establish(portnum, 0);   //server by default
 }
 
 int get_connection(int sockfd)

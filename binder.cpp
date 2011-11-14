@@ -162,7 +162,7 @@ int main()
     //create connection socket for server
     FD_ZERO(&master);    // clear the master and temp sets
     FD_ZERO(&read_fds);
-    int listener = establish(BPORT, 0);
+    int listener = establish(BPORT, 1);
     int newfd;        // newly accept()ed socket descriptor
     if (listener < 0)
     {
