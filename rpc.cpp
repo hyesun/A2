@@ -97,7 +97,7 @@ int establish(unsigned short portnum, int binder)
     //print out the required env var
     if (binder)
     {
-      printf("SERVER_ADDRESS %s\n", server_address);
+      printf("BINDER_ADDRESS %s\n", server_address);
       printf("BINDER_PORT %i\n", port);
 
     }
