@@ -73,6 +73,7 @@ void binder_register(int socketfd, int msglen)
     cout << "fn name: " << DataBase.back().fn_name << endl;
     for(int j=0; j<DataBase.back().argTypesLen/sizeof(int); j++)
     {
+        cout << "argTypeLen: " << DataBase.back().argTypesLen << endl;
         cout << "argType[" << j << "]=" << DataBase.back().argType[j] << endl;
     }
 }
