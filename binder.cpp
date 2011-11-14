@@ -20,8 +20,7 @@ using namespace std;
 #define MAX_NUM_REGISTERS 100
 
 //temp defines
-#define SPORT   33333
-#define CPORT   33334
+//#define BPORT   33335
 
 //message struct
 typedef struct
@@ -42,7 +41,7 @@ int function()
     return 0;
 }
 
-void server_register(int socketfd, int msglen)
+void binder_register(int socketfd, int msglen)
 {
     int success = SUCCESS;
     char server_address[MAXHOSTNAME+1];
@@ -78,6 +77,76 @@ void server_register(int socketfd, int msglen)
     }
 }
 
+void binder_lookup(int socketfd, int msglen)
+{
+    cout << "binder lookup" << endl;
+    int success = SUCCESS;
+    char fn_name[MAXFNNAME+1];
+    int argTypesLen = msglen-sizeof(fn_name); //yes
+    unsigned int* argType = (unsigned int*)malloc(argTypesLen);
+
+    //receive the message
+    int checksum = msglen;
+    checksum -= recv(socketfd, fn_name, sizeof(fn_name), 0);
+    checksum -= recv(socketfd, argType, argTypesLen, 0);
+
+    cout << "binder side (got request): fn request: " << fn_name << endl;
+
+    for(int j=0; j<argTypesLen/sizeof(int); j++)
+    {
+        cout << "binder side (got request):argType[" << j << "]=" << argType[j] << endl;
+    }
+
+    int found = FAILURE;
+    int index_found = -1;
+    //lookup
+    for(int i=0; i< DataBase.size(); i++)
+    {
+        if(fn_name == DataBase[i].fn_name)
+        {
+            index_found = i;
+            found = SUCCESS;
+            for(int j=0; j< argTypesLen/sizeof(int); j++)
+            {
+                if (argType[j] != DataBase[index_found].argType[j])
+                    found = FAILURE;
+            }
+        }
+    }
+
+    if (found == SUCCESS)
+    {
+        cout << "SERVER FUNCTION FOUND" << endl;
+        const char* server_address = DataBase[index_found].server_address.c_str();
+        int port = DataBase[index_found].port;
+        int sendmsglen = sizeof(server_address) + sizeof(port);
+        int sendmsgtype = LOC_SUCCESS;
+        int sendchecksum = sendmsglen + sizeof(sendmsgtype) + sizeof(sendmsglen);
+
+        sendchecksum-=send(socketfd, &sendmsglen, sizeof(sendmsglen), 0);
+        sendchecksum-=send(socketfd, &sendmsgtype, sizeof(sendmsgtype), 0);
+        sendchecksum-=send(socketfd, server_address, MAXHOSTNAME + 1, 0);
+        sendchecksum-=send(socketfd, &port, sizeof(port), 0);
+        cout << "msglen: " << sendmsglen << endl;
+        cout << "sendmsgtype: " << sendmsgtype << endl;
+        cout << "address: " << server_address << endl;
+        cout << "port: " << port << endl;
+
+        if (checksum !=0)
+        {
+            cout << "Error sending back LOC SUCCESS" << endl;
+        }
+
+    }
+    else
+    {
+      int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
+      int msgtype = LOC_FAILURE;
+      int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
+    }
+
+}
+
 //main function
 int main()
 {
@@ -90,7 +159,7 @@ int main()
     //create connection socket for server
     FD_ZERO(&master);    // clear the master and temp sets
     FD_ZERO(&read_fds);
-    int listener = establish(SPORT);
+    int listener = establish(BPORT);
     int newfd;        // newly accept()ed socket descriptor
     if (listener < 0)
     {
@@ -152,7 +221,12 @@ int main()
                     //check msgtype to see if from server
                     if (msgtype == REGISTER && status > 0)
                     {
-                      server_register(socketfd,msglen);
+                      binder_register(socketfd,msglen);
+                    }
+                    else if (msgtype == LOC_REQUEST)
+                    {
+                      cout << "LOCQUEST" << endl;
+                      binder_lookup(socketfd, msglen);
                     }
 
                     if(status <= 0 )

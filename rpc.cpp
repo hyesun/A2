@@ -24,8 +24,8 @@ using namespace std;
 //temp defines
 //#define ADDRESS "hyesun-ubuntu" //stephen-Rev-1-0
 #define ADDRESS "stephen-Rev-1-0" //
-#define BPORT   33333
-#define CPORT   33334
+#define BPORT   33335
+#define SPORT   0
 
 //message types
 enum message_type
@@ -96,8 +96,14 @@ int establish(unsigned short portnum)
     port = ntohs(my_addr.sin_port);
 
     //print out the required env var
-    printf("BINDER_ADDRESS %s\n", server_address);
-    printf("BINDER_PORT %i\n", port);
+    if (port != 0)
+    {
+      printf("SERVER_ADDRESS %s\n", server_address);
+      printf("BINDER_PORT\n", port);
+
+    }
+    printf("SERVER_ADDRESS %s\n", server_address);
+    printf("SERVER_PORT %i\n", port);
 
     //listen for connections
     listen(sockfd, BACKLOG);
@@ -170,12 +176,12 @@ int rpcInit()
     printf("rpcInit\n");
 
     //create connection socket for client
-//    clientfd = establish(CPORT);
-//    if (clientfd < 0)
-//    {
-//        printf("establish error: %i\n", clientfd);
-//        return clientfd;
-//    }
+    clientfd = establish(SPORT);
+    if (clientfd < 0)
+    {
+        printf("establish error: %i\n", clientfd);
+        return clientfd;
+    }
 
     //open a connection to binder, for sending register request. keep this open
 
@@ -198,6 +204,57 @@ int rpcInit()
 
 int rpcCall(char* name, int* argTypes, void** args)
 {
+    binderfd=call_socket((char*)ADDRESS, BPORT);
+    if (binderfd < 0)
+    {
+        printf("call socket error: %i\n", binderfd);
+        return binderfd;
+    }
+
+    int argTypesLen = 0;
+    while(*(argTypes+argTypesLen) != 0)
+    {
+        argTypesLen++;
+    }
+    argTypesLen++;
+    //LOC_REQUEST
+    int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
+    int msgtype = LOC_REQUEST;
+    int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
+    cout << "checksum:" << checksum << endl;
+    cout << "binderfd: " << binderfd << endl;
+    checksum -= send(binderfd, &msglen, sizeof(msglen), 0);
+    checksum -= send(binderfd, &msgtype, sizeof(msgtype), 0);
+    checksum-=send(binderfd, name, MAXFNNAME+s_char, 0);
+    checksum-=send(binderfd, argTypes, argTypesLen*s_int, 0);
+    cout << "checksum at end of LOC_REQUEST:" << checksum << endl;
+    if (checksum != 0)
+      return FAILURE;
+    else//LOC_SUCCESS
+    {
+        int status = recv(binderfd, &msglen, sizeof(msglen), 0);
+        if (status > 0)
+            status = recv(binderfd, &msgtype, sizeof(msgtype), 0);
+        cout << "msglen: " << msglen << endl;
+        cout << "sendmsgtype: " << msgtype << endl;
+        if (msgtype == LOC_SUCCESS)
+        {
+            cout << "LOC SUCCESS!!" << endl;
+            char fn_server_address[MAXHOSTNAME + 1];
+            int fn_server_port;
+            checksum = msglen;
+            checksum -= recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
+            cout << "LOC SUCCESS HERE!!" << endl;
+            cout << "client gets server_add:" << fn_server_address << endl;
+            checksum -= recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
+            cout << "client gets server_add:" << fn_server_address << endl;
+            cout << "client gets server_port_num:" << fn_server_port << endl;
+            if (checksum !=0)
+              return FAILURE;
+
+        }
+    }
+
     printf("rpcCall\n");
     return SUCCESS;
 }
