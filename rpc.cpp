@@ -224,6 +224,12 @@ int rpcCall(char* name, int* argTypes, void** args)
     checksum -= send(binderfd, &msgtype, sizeof(msgtype), 0);
     checksum-=send(binderfd, name, MAXFNNAME+s_char, 0);
     checksum-=send(binderfd, argTypes, argTypesLen*s_int, 0);
+    cout << "LOC REQUEST OF FN:" << name << endl;
+    cout << "argTypesLen:" << argTypesLen << endl;
+    for(int j=0; j<argTypesLen; j++)
+    {
+        cout << "LOC QUEST OF argType[" << j << "]=" << (unsigned int)argTypes[j] << endl;
+    }
     cout << "checksum at end of LOC_REQUEST:" << checksum << endl;
     if (checksum != 0)
       return FAILURE;
