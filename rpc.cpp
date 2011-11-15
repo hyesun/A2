@@ -14,8 +14,8 @@ using namespace std;
 
 //perm defines
 #define BACKLOG 5       //max # of queued connects
-#define MAXHOSTNAME 20  //"hyesun-ubuntu"
-#define MAXFNNAME 2     //"f0"
+#define MAXHOSTNAME 30  //"hyesun-ubuntu"
+#define MAXFNNAME 50    //"f0"
 #define s_char 1        //size of char in bytes
 #define s_int 4         //size of int in bytes
 #define SUCCESS  0
@@ -23,7 +23,7 @@ using namespace std;
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu"
-#define BPORT   33338
+#define BPORT   44444
 #define SPORT   0
 
 //message types
@@ -54,7 +54,7 @@ char server_address[MAXHOSTNAME + 1];
 vector<dataentry> database;
 
 // helper functions
-int calcArgTypesLen(int* argTypes)
+int lenOfArgTypes(int* argTypes)
 {
     int argTypesLen = 0;
 
@@ -69,10 +69,12 @@ int calcArgTypesLen(int* argTypes)
     return argTypesLen;
 }
 
-int sizeOfArgs(int argType)
+int sizeOfType(int argType)
 {
     switch (argType)
     {
+        case 0:
+            return 0;
         case ARG_CHAR:
             return sizeof(char);
         case ARG_SHORT:
@@ -88,6 +90,35 @@ int sizeOfArgs(int argType)
         default:
             return -1;
     }
+}
+
+int sizeOfArgs(int* argTypes)
+{
+    //declare
+    int argTypesLen, typeSize, typeLen, totalLen = 0;
+
+    //see how many elements are in array
+    argTypesLen = lenOfArgTypes(argTypes);
+
+    //get size of each element type
+    for(int i=0; i<argTypesLen; i++)
+    {
+        //read second byte and get size of the type
+        typeSize = (argTypes[i] & 0x00FF0000) >> 16;
+        typeSize = sizeOfType(typeSize);
+
+        //read lower two bytes to get low long the arg array is
+        typeLen = (argTypes[i] & 0x0000FFFF);
+
+        //array len of 0 indicates scalar type
+        if(typeLen == 0)
+            typeLen = 1;
+
+        //update total length
+        totalLen = totalLen + typeSize*typeLen;
+    }
+
+    return totalLen;
 }
 
 int establish(unsigned short portnum, int binder)
@@ -255,7 +286,7 @@ int rpcCall(char* name, int* argTypes, void** args)
     }
 
     //get message info ready
-    int argTypesLen = calcArgTypesLen(argTypes);
+    int argTypesLen = lenOfArgTypes(argTypes);
     int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
     int msgtype = LOC_REQUEST;
     int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
@@ -320,8 +351,8 @@ int rpcCall(char* name, int* argTypes, void** args)
     }
 
     //get message info ready
-    //argTypesLen = calcArgTypesLen(argTypes); already know
-    msglen = MAXFNNAME+s_char;
+    int argLenByte = sizeOfArgs(argTypes);    //count how long args is
+    msglen = MAXFNNAME+s_char + argTypesLen*s_int + argLenByte;
     msgtype = EXECUTE;
     checksum = sizeof(msglen) + sizeof(msgtype) + msglen;
 
@@ -332,12 +363,7 @@ int rpcCall(char* name, int* argTypes, void** args)
     //send the main message
     checksum-=send(serverfd, name, MAXFNNAME+s_char, 0);
     checksum-=send(serverfd, argTypes, argTypesLen*s_int, 0);
-
-    //send the args!!!!!!!!! so hard :(
-    //count how long args are.
-
-
-
+    checksum-=send(serverfd, args, argLenByte, 0);
 
     printf("rpcCall done\n");
     return SUCCESS;
@@ -348,7 +374,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     printf("rpcRegister\n");
 
     //count argTypes length
-    int argTypesLen = calcArgTypesLen(argTypes);
+    int argTypesLen = lenOfArgTypes(argTypes);
 
     //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
     int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+s_char + argTypesLen*s_int;
@@ -413,8 +439,7 @@ int rpcExecute()
     printf("rpcExecute\n");
 
     //declare
-    unsigned int* argTypes;
-    int checksum, msglen, msgtype, argTypesLenByte;
+    int checksum, msglen, msgtype;
     char fn_name[MAXFNNAME+s_char];
 
     //wait for client to call my socket
@@ -425,15 +450,41 @@ int rpcExecute()
     recv(newsockfd, &msgtype, sizeof(msgtype), 0);
 
     //prepare argTypes array
-    argTypesLenByte = msglen-sizeof(fn_name);
-    argTypes = (unsigned int*)malloc(argTypesLenByte);
+    int argsCumulativeSize = msglen-sizeof(fn_name);
+    int *argsCumulative = (int*)malloc(argsCumulativeSize);
 
     //read main message
     recv(newsockfd, fn_name, sizeof(fn_name), 0);
-    recv(newsockfd, argTypes, sizeof(argTypesLenByte), 0);
+    recv(newsockfd, argsCumulative, sizeof(argsCumulativeSize), 0);
 
-    //read args. so hard :(
+    //unpack argsCumulative
+    int argTypesLen = lenOfArgTypes(argsCumulative);
+    int *argTypes = (int*)malloc(argTypesLen*s_int);
 
+    int argsSize = argsCumulativeSize - argTypesLen*s_int;
+    void* args = (void*)malloc(argsSize);
+
+    memcpy(argTypes, argsCumulative, argTypesLen*s_int);
+    memcpy(args, argsCumulative+argTypesLen, argsSize);
+
+    //send it to skel
+    for(int i=0; i<database.size(); i++)
+    {
+        string a = database[i].fn_name;
+        string b = fn_name;
+        if (a == b)
+        {
+            printf("match found in database\n");
+            database[i].fn_skel(argTypes, &args);
+        }
+    }
+
+    //get the computation result, which is the first arg
+    int result = *((int*)args);
+    printf("result is %i\n", result);
+
+
+    printf("done\n");
     return SUCCESS;
 }
 
