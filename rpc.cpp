@@ -69,6 +69,27 @@ int calcArgTypesLen(int* argTypes)
     return argTypesLen;
 }
 
+int sizeOfArgs(int argType)
+{
+    switch (argType)
+    {
+        case ARG_CHAR:
+            return sizeof(char);
+        case ARG_SHORT:
+            return sizeof(short);
+        case ARG_INT:
+            return sizeof(int);
+        case ARG_LONG:
+            return sizeof(long);
+        case ARG_DOUBLE:
+            return sizeof(double);
+        case ARG_FLOAT:
+            return sizeof(float);
+        default:
+            return -1;
+    }
+}
+
 int establish(unsigned short portnum, int binder)
 {
     int sockfd, result;
@@ -313,6 +334,9 @@ int rpcCall(char* name, int* argTypes, void** args)
     checksum-=send(serverfd, argTypes, argTypesLen*s_int, 0);
 
     //send the args!!!!!!!!! so hard :(
+    //count how long args are.
+
+
 
 
     printf("rpcCall done\n");
