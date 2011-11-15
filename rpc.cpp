@@ -11,7 +11,6 @@ using namespace std;
 #include <vector>
 #include <string>
 #include <strings.h>
-#include <arpa/inet.h>
 #include "rpc.h"
 
 //perm defines
@@ -35,7 +34,11 @@ enum message_type
     REGISTER,
     LOC_REQUEST,
     LOC_SUCCESS,
-    LOC_FAILURE
+    LOC_FAILURE,
+    EXECUTE,
+    EXECUTE_SUCCESS,
+    EXECUTE_FAILURE,
+    TERMINATE
 };
 
 //local database for server
@@ -53,6 +56,41 @@ char server_address[MAXHOSTNAME + 1];
 vector<dataentry> database;
 
 // helper functions
+int calcArgTypesLen(int* argTypes)
+{
+    int argTypesLen = 0;
+
+    //reads the pointer until it reads 0, indicating end of array
+    while(*(argTypes+argTypesLen) != 0)
+    {
+        argTypesLen++;
+    }
+    argTypesLen++;
+
+    //return the num of elements in the array
+    return argTypesLen;
+}
+
+int sizeOfArgs(int argType)
+{
+    switch (argType)
+    {
+        case ARG_CHAR:
+            return sizeof(char);
+        case ARG_SHORT:
+            return sizeof(short);
+        case ARG_INT:
+            return sizeof(int);
+        case ARG_LONG:
+            return sizeof(long);
+        case ARG_DOUBLE:
+            return sizeof(double);
+        case ARG_FLOAT:
+            return sizeof(float);
+        default:
+            return -1;
+    }
+}
 
 int establish(unsigned short portnum, int binder)
 {
@@ -133,12 +171,9 @@ int call_socket(char *hostname, int portnum)
     int sockfd, result;
     struct hostent *host;
     struct sockaddr_in my_addr;
-    struct in_addr **addr_list;
 
     //get host info
     host = gethostbyname(hostname);
-    addr_list = (struct in_addr **)host->h_addr_list;
-    cout << "host name: " << inet_ntoa(*addr_list[0]) <<endl;
     if (host == NULL)
     {
         printf("gethost error\n");
@@ -148,8 +183,6 @@ int call_socket(char *hostname, int portnum)
     //config socket
     memset(&my_addr, 0, sizeof(my_addr));   //clean memory
     memcpy((char *) &my_addr.sin_addr, host->h_addr, host->h_length);
-    //bcopy((char *)host->h_addr,(char *)&my_addr.sin_addr.s_addr,host->h_length);
-    cout << "host name in my_addr:" << inet_ntoa(my_addr.sin_addr) << endl;
     my_addr.sin_family =host->h_addrtype;
     my_addr.sin_port = htons((u_short)portnum);
     //get socket file descriptor
@@ -159,10 +192,8 @@ int call_socket(char *hostname, int portnum)
         printf("socket error: %i\n", sockfd);
         return sockfd;
     }
-    cout << "socket result: " << sockfd << endl;
     //connect
     result = connect(sockfd, (struct sockaddr*)&my_addr, sizeof my_addr);
-    cout << "connect result: " << result << endl;
     if (result < 0)
     {
         printf("connect error: %i\n", result);
@@ -208,8 +239,13 @@ int rpcInit()
 
 int rpcCall(char* name, int* argTypes, void** args)
 {
+    //declarations
     char fn_server_address[MAXHOSTNAME + 1];
     int fn_server_port;
+
+    //BINDER PART------------------------------------------
+
+    //connect to binder
     binderfd=call_socket((char*)ADDRESS, BPORT);
     if (binderfd < 0)
     {
@@ -217,55 +253,92 @@ int rpcCall(char* name, int* argTypes, void** args)
         return binderfd;
     }
 
-    int argTypesLen = 0;
-    while(*(argTypes+argTypesLen) != 0)
-    {
-        argTypesLen++;
-    }
-    argTypesLen++;
-    //LOC_REQUEST
+    //get message info ready
+    int argTypesLen = calcArgTypesLen(argTypes);
     int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
     int msgtype = LOC_REQUEST;
     int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
-    cout << "checksum:" << checksum << endl;
-    cout << "binderfd: " << binderfd << endl;
-    checksum -= send(binderfd, &msglen, sizeof(msglen), 0);
-    checksum -= send(binderfd, &msgtype, sizeof(msgtype), 0);
+
+    //first send msglen and msgtype
+    checksum-=send(binderfd, &msglen, sizeof(msglen), 0);
+    checksum-=send(binderfd, &msgtype, sizeof(msgtype), 0);
+
+    //send the main message
     checksum-=send(binderfd, name, MAXFNNAME+s_char, 0);
     checksum-=send(binderfd, argTypes, argTypesLen*s_int, 0);
-    cout << "LOC REQUEST OF FN:" << name << endl;
-    cout << "argTypesLen:" << argTypesLen << endl;
-    for(int j=0; j<argTypesLen; j++)
-    {
-        cout << "LOC QUEST OF argType[" << j << "]=" << (unsigned int)argTypes[j] << endl;
-    }
-    cout << "checksum at end of LOC_REQUEST:" << checksum << endl;
+
+    //check that all bytes have been sent
     if (checksum != 0)
-      return FAILURE;
-    else//LOC_SUCCESS
     {
-        int status = recv(binderfd, &msglen, sizeof(msglen), 0);
-        if (status > 0)
-            status = recv(binderfd, &msgtype, sizeof(msgtype), 0);
-        cout << "msglen: " << msglen << endl;
-        cout << "sendmsgtype: " << msgtype << endl;
-        if (msgtype == LOC_SUCCESS)
-        {
-            cout << "LOC SUCCESS!!" << endl;
-            checksum = msglen;
-            checksum -= recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
-            cout << "LOC SUCCESS HERE!!" << endl;
-            cout << "client gets server_add:" << fn_server_address << endl;
-            checksum -= recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
-            cout << "client gets server_add:" << fn_server_address << endl;
-            cout << "client gets server_port_num:" << fn_server_port << endl;
-            if (checksum !=0)
-              return FAILURE;
-        }
+        printf("ERROR in rpcCall()\n");
+        return FAILURE;
     }
+
+    //get binder's reply
+    recv(binderfd, &msglen, sizeof(msglen), 0);
+    recv(binderfd, &msgtype, sizeof(msgtype), 0);
+    checksum = msglen;
+    if (msgtype == LOC_SUCCESS)
+    {
+        printf("loc_success\n");
+        checksum-=recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
+        checksum-=recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
+    }
+    else if(msgtype == LOC_FAILURE)
+    {
+        int reasonCode;
+        checksum-=recv(binderfd, &reasonCode, sizeof(reasonCode), 0);
+        cout << "LOC_FAILURE. reasoncode = " << reasonCode << endl;
+        close(binderfd);
+        return reasonCode;
+    }
+    else
+    {
+        printf("ERROR in rpcCall()\n");
+        return FAILURE;
+    }
+
+    //check that all bytes have been read
+    if (checksum != 0)
+    {
+        printf("ERROR in rpcCall()\n");
+        return FAILURE;
+    }
+
+    //done with binder
     close(binderfd);
 
-    printf("rpcCall\n");
+    //SERVER PART------------------------------------------
+
+    //connect to server
+    int serverfd=call_socket(fn_server_address, fn_server_port);
+    if (serverfd < 0)
+    {
+        printf("call socket error: %i\n", serverfd);
+        return serverfd;
+    }
+
+    //get message info ready
+    //argTypesLen = calcArgTypesLen(argTypes); already know
+    msglen = MAXFNNAME+s_char;
+    msgtype = EXECUTE;
+    checksum = sizeof(msglen) + sizeof(msgtype) + msglen;
+
+    //first send msglen and msgtype
+    checksum-=send(serverfd, &msglen, sizeof(msglen), 0);
+    checksum-=send(serverfd, &msgtype, sizeof(msgtype), 0);
+
+    //send the main message
+    checksum-=send(serverfd, name, MAXFNNAME+s_char, 0);
+    checksum-=send(serverfd, argTypes, argTypesLen*s_int, 0);
+
+    //send the args!!!!!!!!! so hard :(
+    //count how long args are.
+
+
+
+
+    printf("rpcCall done\n");
     return SUCCESS;
 }
 
@@ -274,12 +347,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     printf("rpcRegister\n");
 
     //count argTypes length
-    int argTypesLen = 0;
-    while(*(argTypes+argTypesLen) != 0)
-    {
-        argTypesLen++;
-    }
-    argTypesLen++;
+    int argTypesLen = calcArgTypesLen(argTypes);
 
     //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
     int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+s_char + argTypesLen*s_int;
@@ -307,7 +375,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
         return FAILURE;
     }
 
-    //double check with binder to make sure it was successful
+    //get binder reply
     int reply=FAILURE;
     checksum=recv(binderfd, &reply, sizeof(reply), 0);
     if (checksum != sizeof(reply))
@@ -327,7 +395,6 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     record.fn_skel=f;
     database.push_back(record);
 
-
     //read back the record
     for(int i=0; i<database.size(); i++)
     {
@@ -342,8 +409,30 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
 int rpcExecute()
 {
-    pause();
     printf("rpcExecute\n");
+
+    //declare
+    unsigned int* argTypes;
+    int checksum, msglen, msgtype, argTypesLenByte;
+    char fn_name[MAXFNNAME+s_char];
+
+    //wait for client to call my socket
+    int newsockfd = get_connection(clientfd);
+
+    //read length and type
+    recv(newsockfd, &msglen, sizeof(msglen), 0);
+    recv(newsockfd, &msgtype, sizeof(msgtype), 0);
+
+    //prepare argTypes array
+    argTypesLenByte = msglen-sizeof(fn_name);
+    argTypes = (unsigned int*)malloc(argTypesLenByte);
+
+    //read main message
+    recv(newsockfd, fn_name, sizeof(fn_name), 0);
+    recv(newsockfd, argTypes, sizeof(argTypesLenByte), 0);
+
+    //read args. so hard :(
+
     return SUCCESS;
 }
 
