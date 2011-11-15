@@ -10,6 +10,7 @@ using namespace std;
 #include <iostream>
 #include <vector>
 #include <string>
+#include <strings.h>
 #include "rpc.h"
 
 //perm defines
@@ -213,9 +214,7 @@ int call_socket(char *hostname, int portnum)
     memset(&my_addr, 0, sizeof(my_addr));   //clean memory
     memcpy((char *) &my_addr.sin_addr, host->h_addr, host->h_length);
     my_addr.sin_family =host->h_addrtype;
-    my_addr.sin_port = htons(portnum);
-    my_addr.sin_addr.s_addr = INADDR_ANY;
-
+    my_addr.sin_port = htons((u_short)portnum);
     //get socket file descriptor
     sockfd = socket(PF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
@@ -225,7 +224,7 @@ int call_socket(char *hostname, int portnum)
     }
 
     //connect
-    result = connect(sockfd, (struct sockaddr*)&my_addr, sizeof(struct sockaddr_in));
+    result = connect(sockfd, (struct sockaddr*)&my_addr, sizeof my_addr);
     if (result < 0)
     {
         printf("connect error: %i\n", result);
