@@ -19,14 +19,11 @@ using namespace std;
 #define CLIENT_THREAD 1
 #define MAX_NUM_REGISTERS 100
 
-//temp defines
-//#define BPORT   33335
-
 //message struct
 typedef struct
 {
-        string server_address;
-        int port;
+    string server_address;
+    int port;
 	string fn_name;
 	unsigned int* argType;
 	int argTypesLen;
@@ -122,7 +119,7 @@ void binder_lookup(int socketfd, int msglen)
             cout << "SERVER FUNCTION FOUND" << endl;
             const char* server_address = DataBase[index_found].server_address.c_str();
             int port = DataBase[index_found].port;
-            int sendmsglen = sizeof(server_address) + sizeof(port);
+            int sendmsglen = MAXHOSTNAME+s_char + sizeof(port);
             int sendmsgtype = LOC_SUCCESS;
             int sendchecksum = sendmsglen + sizeof(sendmsgtype) + sizeof(sendmsglen);
 
