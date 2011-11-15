@@ -24,7 +24,7 @@ using namespace std;
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu"
-#define BPORT   44444
+#define BPORT   19391
 #define SPORT   0
 
 //message types
@@ -286,6 +286,8 @@ int rpcCall(char* name, int* argTypes, void** args)
 
     //get message info ready
     int argTypesLen = lenOfArgTypes(argTypes);
+    cout << "name is " << name << " length is "<< argTypesLen << endl;
+
     int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
     int msgtype = LOC_REQUEST;
     int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
@@ -351,7 +353,9 @@ int rpcCall(char* name, int* argTypes, void** args)
 
     //get message info ready
     int argLenByte = sizeOfArgs(argTypes);    //count how long args is
+    printf("arglenbyte is %i", argLenByte);
     msglen = MAXFNNAME+s_char + argTypesLen*s_int + argLenByte;
+    printf("msglen is %i", msglen);
     msgtype = EXECUTE;
     checksum = sizeof(msglen) + sizeof(msgtype) + msglen;
 
@@ -362,7 +366,19 @@ int rpcCall(char* name, int* argTypes, void** args)
     //send the main message
     checksum-=send(serverfd, name, MAXFNNAME+s_char, 0);
     checksum-=send(serverfd, argTypes, argTypesLen*s_int, 0);
-    checksum-=send(serverfd, args, argLenByte, 0);
+
+    for(int i=0; i<argTypesLen; i++)
+    {
+        printf("argtype %i\n", *(argTypes+i));
+    }
+
+
+    cout << "name is " << name << " length is "<< argTypesLen << endl;
+    for(int i=0; i<argTypesLen-1; i++)
+    {
+        cout << *((int*)args[i]) << endl;
+        send(serverfd, (int*)*(args+i), sizeof(int*), 0);
+    }
 
     printf("rpcCall done\n");
     return SUCCESS;
@@ -373,7 +389,9 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     printf("rpcRegister\n");
 
     //count argTypes length
+
     int argTypesLen = lenOfArgTypes(argTypes);
+    cout << "name is " << name << " length is "<< argTypesLen << endl;
 
     //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
     int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+s_char + argTypesLen*s_int;
@@ -448,23 +466,44 @@ int rpcExecute()
     recv(newsockfd, &msglen, sizeof(msglen), 0);
     recv(newsockfd, &msgtype, sizeof(msgtype), 0);
 
+    cout << "rpcExecute msglen is " << msglen << endl;
+
     //prepare argTypes array
     int argsCumulativeSize = msglen-sizeof(fn_name);
+
+    cout << "cum size is " << argsCumulativeSize << endl;
+
     int *argsCumulative = (int*)malloc(argsCumulativeSize);
 
     //read main message
     recv(newsockfd, fn_name, sizeof(fn_name), 0);
-    recv(newsockfd, argsCumulative, sizeof(argsCumulativeSize), 0);
+    recv(newsockfd, argsCumulative, argsCumulativeSize, 0);
 
     //unpack argsCumulative
     int argTypesLen = lenOfArgTypes(argsCumulative);
+    cout << "name is " << fn_name << " length is "<< argTypesLen << endl;
+    printf("%i\n", *argsCumulative);
+    printf("%i\n", *(argsCumulative+1));
+    printf("%i\n", *(argsCumulative+2));
+    printf("%i\n", *(argsCumulative+3));
+
+
     int *argTypes = (int*)malloc(argTypesLen*s_int);
 
     int argsSize = argsCumulativeSize - argTypesLen*s_int;
-    void* args = (void*)malloc(argsSize);
+    void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
 
     memcpy(argTypes, argsCumulative, argTypesLen*s_int);
-    memcpy(args, argsCumulative+argTypesLen, argsSize);
+
+    for(int i=0; i<argTypesLen-1; i++)
+    {
+        printf("loop\n");
+
+        memcpy((void *)(*(args+i)), argsCumulative+argTypesLen+i, sizeof(void*));
+    }
+
+    printf("memcpy complete\n");
+    cout << "its " << *(int *)(*(args+1)) << endl;
 
     //send it to skel
     for(int i=0; i<database.size(); i++)
@@ -474,12 +513,12 @@ int rpcExecute()
         if (a == b)
         {
             printf("match found in database\n");
-            database[i].fn_skel(argTypes, &args);
+            database[i].fn_skel(argTypes, args);
         }
     }
 
     //get the computation result, which is the first arg
-    int result = *((int*)args);
+    int result = *((int*)args[0]);
     printf("result is %i\n", result);
 
 
