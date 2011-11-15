@@ -41,6 +41,30 @@ int function()
     return 0;
 }
 
+int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
+{
+  int index_found = -1;
+  int fn_name_found = FAILURE;
+  int arg_types_match = SUCCESS;
+  for(int i=0; i< DataBase.size(); i++)
+  {
+      if(fn_name == DataBase[i].fn_name)
+      {
+          index_found = i;
+          fn_name_found = SUCCESS;
+          for(int j=0; j< argTypesLen/sizeof(int); j++)
+          {
+              if (argType[j] != DataBase[index_found].argType[j])
+                arg_types_match = FAILURE;
+          }
+      }
+  }
+  if (fn_name_found == SUCCESS && arg_types_match == SUCCESS)
+    return index_found;
+  else
+    return FAILURE;
+}
+
 void binder_register(int socketfd, int msglen)
 {
     int success = SUCCESS;
@@ -59,26 +83,40 @@ void binder_register(int socketfd, int msglen)
 
     if (checksum != 0)
       success = FAILURE;
-    data_point a;
-    a.server_address = server_address;
-    a.port = port;
-    a.fn_name = fn_name;
-    a.argType = argType;
-    a.argTypesLen = argTypesLen;
-    DataBase.push_back(a);
-    send(socketfd, &success, sizeof(success), 0);
-
-    cout << "address: " << DataBase.back().server_address << endl;
-    cout << "port: " << DataBase.back().port << endl;
-    cout << "fn name: " << DataBase.back().fn_name << endl;
-    for(int j=0; j<DataBase.back().argTypesLen/sizeof(int); j++)
+    //check if same function from same server already exists
+    //and over write if true
+    int index = database_lookup(fn_name, argType, argTypesLen);
+    if (index != -1 && DataBase[index].server_address == server_address
+        && DataBase[index].port == port)
     {
-        cout << "argTypeLen: " << DataBase.back().argTypesLen << endl;
-        cout << "argType[" << j << "]=" << DataBase.back().argType[j] << endl;
+        //over write
+        DataBase[index].fn_name = fn_name;
+        DataBase[index].argType = argType;
+        DataBase[index].argTypesLen = argTypesLen;
+    }
+    else
+    {
+        data_point a;
+        a.server_address = server_address;
+        a.port = port;
+        a.fn_name = fn_name;
+        a.argType = argType;
+        a.argTypesLen = argTypesLen;
+        DataBase.push_back(a);
+        send(socketfd, &success, sizeof(success), 0);
+
+        cout << "address: " << DataBase.back().server_address << endl;
+        cout << "port: " << DataBase.back().port << endl;
+        cout << "fn name: " << DataBase.back().fn_name << endl;
+        for(int j=0; j<DataBase.back().argTypesLen/sizeof(int); j++)
+        {
+            cout << "argTypeLen: " << DataBase.back().argTypesLen << endl;
+            cout << "argType[" << j << "]=" << DataBase.back().argType[j] << endl;
+        }
     }
 }
 
-void binder_lookup(int socketfd, int msglen)
+void binder_service_client(int socketfd, int msglen)
 {
     cout << "binder lookup" << endl;
     int success = SUCCESS;
@@ -101,23 +139,14 @@ void binder_lookup(int socketfd, int msglen)
         }
 
         int found = FAILURE;
-        int index_found = -1;
-        //lookup
-        for(int i=0; i< DataBase.size(); i++)
-        {
-            if(fn_name == DataBase[i].fn_name)
-            {
-                index_found = i;
-                found = SUCCESS;
-                for(int j=0; j< argTypesLen/sizeof(int); j++)
-                {
-                    if (argType[j] != DataBase[index_found].argType[j])
-                        found = FAILURE;
-                }
-            }
-        }
 
-        if (found == SUCCESS)
+
+        int index_found = -1;
+        //lookup returns the index of found
+        index_found = database_lookup((string)fn_name, argType, argTypesLen);
+
+
+        if (index_found != FAILURE)
         {
             cout << "SERVER FUNCTION FOUND" << endl;
             const char* server_address = DataBase[index_found].server_address.c_str();
@@ -135,6 +164,16 @@ void binder_lookup(int socketfd, int msglen)
             cout << "address: " << server_address << endl;
             cout << "port: " << port << endl;
 
+            //put the serviced function to the end
+            data_point temp;
+            temp.fn_name = DataBase[index_found].fn_name;
+            temp.server_address = DataBase[index_found].server_address;
+            temp.port = DataBase[index_found].port;
+            temp.argType = DataBase[index_found].argType;
+            temp.argTypesLen = DataBase[index_found].argTypesLen;
+            DataBase.erase(DataBase.begin()+index_found);
+            DataBase.push_back(temp);
+
             if (checksum !=0)
             {
                 cout << "Error sending back LOC SUCCESS" << endl;
@@ -143,6 +182,7 @@ void binder_lookup(int socketfd, int msglen)
         }
         else
         {
+          cout << "SERVER FUNCTION NOT FOUND" << endl;
           int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
           int msgtype = LOC_FAILURE;
           int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
@@ -229,7 +269,7 @@ int main()
                     }
                     else if (msgtype == LOC_REQUEST)
                     {
-                      binder_lookup(socketfd, msglen);
+                      binder_service_client(socketfd, msglen);
                     }
 
                     if(status <= 0 )

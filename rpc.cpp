@@ -10,6 +10,8 @@ using namespace std;
 #include <iostream>
 #include <vector>
 #include <string>
+#include <strings.h>
+#include <arpa/inet.h>
 #include "rpc.h"
 
 //perm defines
@@ -22,8 +24,9 @@ using namespace std;
 #define FAILURE -1
 
 //temp defines
-#define ADDRESS "hyesun-ubuntu"
-#define BPORT   33335
+//#define ADDRESS "mef-linux010.student"//"stephen-Rev-1-0"
+#define ADDRESS "stephen-Rev-1-0"
+#define BPORT   33337
 #define SPORT   0
 
 //message types
@@ -130,9 +133,12 @@ int call_socket(char *hostname, int portnum)
     int sockfd, result;
     struct hostent *host;
     struct sockaddr_in my_addr;
+    struct in_addr **addr_list;
 
     //get host info
     host = gethostbyname(hostname);
+    addr_list = (struct in_addr **)host->h_addr_list;
+    cout << "host name: " << inet_ntoa(*addr_list[0]) <<endl;
     if (host == NULL)
     {
         printf("gethost error\n");
@@ -142,10 +148,10 @@ int call_socket(char *hostname, int portnum)
     //config socket
     memset(&my_addr, 0, sizeof(my_addr));   //clean memory
     memcpy((char *) &my_addr.sin_addr, host->h_addr, host->h_length);
+    //bcopy((char *)host->h_addr,(char *)&my_addr.sin_addr.s_addr,host->h_length);
+    cout << "host name in my_addr:" << inet_ntoa(my_addr.sin_addr) << endl;
     my_addr.sin_family =host->h_addrtype;
-    my_addr.sin_port = htons(portnum);
-    my_addr.sin_addr.s_addr = INADDR_ANY;
-
+    my_addr.sin_port = htons((u_short)portnum);
     //get socket file descriptor
     sockfd = socket(PF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
@@ -153,9 +159,10 @@ int call_socket(char *hostname, int portnum)
         printf("socket error: %i\n", sockfd);
         return sockfd;
     }
-
+    cout << "socket result: " << sockfd << endl;
     //connect
-    result = connect(sockfd, (struct sockaddr*)&my_addr, sizeof(struct sockaddr_in));
+    result = connect(sockfd, (struct sockaddr*)&my_addr, sizeof my_addr);
+    cout << "connect result: " << result << endl;
     if (result < 0)
     {
         printf("connect error: %i\n", result);
@@ -201,6 +208,8 @@ int rpcInit()
 
 int rpcCall(char* name, int* argTypes, void** args)
 {
+    char fn_server_address[MAXHOSTNAME + 1];
+    int fn_server_port;
     binderfd=call_socket((char*)ADDRESS, BPORT);
     if (binderfd < 0)
     {
@@ -243,8 +252,6 @@ int rpcCall(char* name, int* argTypes, void** args)
         if (msgtype == LOC_SUCCESS)
         {
             cout << "LOC SUCCESS!!" << endl;
-            char fn_server_address[MAXHOSTNAME + 1];
-            int fn_server_port;
             checksum = msglen;
             checksum -= recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
             cout << "LOC SUCCESS HERE!!" << endl;
@@ -254,10 +261,10 @@ int rpcCall(char* name, int* argTypes, void** args)
             cout << "client gets server_port_num:" << fn_server_port << endl;
             if (checksum !=0)
               return FAILURE;
-
         }
     }
     close(binderfd);
+
     printf("rpcCall\n");
     return SUCCESS;
 }
