@@ -122,6 +122,14 @@ int sizeOfArgs(int* argTypes)
     return totalLen;
 }
 
+int getArgType(int * argType)
+{
+    int type = -1;
+    type = (unsigned int)argType & 0x00FF0000; //mask it
+    type = (*argType) >> 16;
+    return type;
+}
+
 int establish(unsigned short portnum, int binder)
 {
     int sockfd, result;
@@ -373,10 +381,23 @@ int rpcCall(char* name, int* argTypes, void** args)
     }
     cout << "name is " << name << " length is "<< argTypesLen << endl;
     */
+    cout << "size of char" << sizeof(char) << endl;
+    cout << "size of short" << sizeof(short) << endl;
+    cout << "size of int" << sizeof(int) << endl;
+    cout << "size of long" << sizeof(long) << endl;
+    cout << "size of double" << sizeof(double) << endl;
+    cout << "size of float" << sizeof(float) << endl;
     for(int i=0; i<argTypesLen-1; i++)
     {
-
-        //cout << *((int*)args[i]) << endl;
+      char a = 'a';
+      cout << "--------------" << endl;
+        cout << "ARG ANALYSIS:" << endl;
+        if (i == 0)
+        for (int j=0; a != '\0';j++)
+        {
+           a = *((char*)(args[i])+j);
+           cout << a;
+        }
         send(serverfd, (int*)args[i], sizeof(int), 0);
     }
 
@@ -498,31 +519,52 @@ int rpcExecute()
     int argsSize = argsCumulativeSize - argTypesLen*s_int;
     void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
     //
-    void* args_holder = (void*)malloc((argTypesLen-1)*sizeof(void*));
-
-//    printf("%i\n", *argTypes);
-//    printf("%i\n", *(argTypes+1));
-//    printf("%i\n", *(argTypes+2));
-//    printf("%i\n", *(argTypes+3));
-//    cout << "argTypesLen: "<< argTypesLen << endl;
+    void* argsIndex = argsCumulative+argTypesLen;
     for(int i=0; i<argTypesLen-1; i++)
     {
+        int arr_size;
+        arr_size = 0xFF & *(argTypes+i);
+        //cout << "array size" << arr_size << endl;
+        void* args_holder = (void*)malloc((arr_size)*sizeof(void*));
         *(args+i) = (args_holder+i*sizeof(void*));
-        printf("loop\n");
+        int arg_type = getArgType(argTypes+i);
+        for(int j=0; j<arr_size; j++)
+        {
+            if (arg_type == ARG_CHAR)
+            {
+                memcpy(args_holder, argsIndex+i+j, sizeof(void*));
+                argsIndex = ((char*)argsIndex)+1;
+                cout << "here kwak1" << endl;
+            }
+            else if (arg_type == ARG_SHORT)
+            {
+                memcpy(args_holder, argsIndex+i+j, sizeof(void*));
+                argsIndex = ((short*)argsIndex)+1;
+                cout << "here kwak2" << endl;
+            }
+            else if (arg_type == ARG_DOUBLE)
+            {
+                memcpy(args_holder, argsCumulative+argTypesLen+i+j, sizeof(void*));
+                argsIndex = ((double*)argsIndex)+1;
+                cout << "here kwak3" << endl;
+            }
+            else
+            {
+                //int long and float are all same sizes
+                memcpy(args_holder, argsCumulative+argTypesLen+i+j, sizeof(void*));
+                argsIndex = ((int*)argsIndex)+1;
+                cout << "here kwak4" << endl;
+            }
+        }
+//        size of char1
+//        size of short2
+//        size of int4
+//        size of long4
+//        size of double8
+//        size of float4
 
-        memcpy(*(args+i), argsCumulative+argTypesLen+i, sizeof(void*));
-//        cout << "address of *(args+" << i << ")"<< args+i << endl;
-//        cout << "value of *(args+" << i << ")"<< *(args+i) << endl;
-//        cout << "value of **(args+" << i << ")"<< *((int*)*(args+i)) << endl;
+        //memcpy(args_holder, argsCumulative+argTypesLen+i, sizeof(void*));
     }
-
-//    for(int i=0; i<argTypesLen-1; i++)
-//    {
-//        cout << "address of *(args+" << i << ")"<< args+i << endl;
-//        cout << "value of *(args+" << i << ")"<< *(args+i) << endl;
-//        cout << "value of **(args+" << i << ")"<< *((int*)*(args+i)) << endl;
-//        //cout << "value of argsCumulative+argTypesLen+i" << i << *(argsCumulative+argTypesLen+i) << endl;
-//    }
     printf("memcpy complete\n");
 
     //send it to skel
