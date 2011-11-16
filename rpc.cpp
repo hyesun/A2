@@ -395,11 +395,12 @@ int rpcCall(char* name, int* argTypes, void** args)
 //           cout << a;
 //        }
         int arr_size;
-        int argsize = lenOfArgTypes(argTypes+i);
+        int typeSize = (*(argTypes + i)) & 0x00FF0000 >> 16;
+        typeSize = sizeOfType(typeSize);
         arr_size = 0xFF & *(argTypes+i);
         test += arr_size;
         int arg_type = getArgType(argTypes+i);
-        send(serverfd, (int*)args[i], arr_size*argsize, 0);
+        send(serverfd, (int*)args[i], arr_size*typeSize, 0);
     }
     cout << "send test: " << test << endl;
     printf("rpcCall done\n");
@@ -548,26 +549,28 @@ int rpcExecute()
         {
             if (arg_type == ARG_CHAR)
             {
-                cout << "args_holder(argsIndex):" << *(char*)(argsIndex) << endl;
                 //cout << "args_holder(argsCumulative+argTypesLen):" << *((char*)(argsCumulative+argTypesLen)+i+j) << endl;
-                argsIndex = (char*)argsIndex + j;
-                memcpy(args_holder, argsIndex, sizeof(char));
+
+                memcpy((char*)args_holder+j, argsIndex, sizeof(char));
+                //cout << "&args_holder(argsIndex):" << args_holder+j << endl;
+                //cout << "args_holder(argsIndex):" << *((char*)(args_holder)+j) << endl;
+                argsIndex = (char*)argsIndex + 1;
             }
             else if (arg_type == ARG_SHORT)
             {
-                argsIndex = (short*)argsIndex + j;
-                memcpy(args_holder, argsIndex, sizeof(short));
+                memcpy((short*)args_holder+j, argsIndex, sizeof(short));
+                argsIndex = (short*)argsIndex + 1;
             }
             else if (arg_type == ARG_DOUBLE)
             {
-                argsIndex = (double*)argsIndex + j;
-                memcpy(args_holder, argsIndex, sizeof(double));
+                memcpy((double*)args_holder+j, argsIndex, sizeof(double));
+                argsIndex = (double*)argsIndex + 1;
             }
             else
             {
-                argsIndex = (int*)argsIndex + j;
                 //int long and float are all same sizes
-                memcpy(args_holder, argsIndex, sizeof(int));
+                memcpy((int*)args_holder+j, argsIndex, sizeof(int));
+                argsIndex = (int*)argsIndex + 1;
             }
 
         }
@@ -617,8 +620,9 @@ int rpcExecute()
     }
 
     //get the computation result, which is the first arg
-    int result = *((int*)args[0]);
-    printf("result is %i\n", result);
+    char * result = ((char*)args[0]);
+    cout << "result is " << result << endl;
+    //printf("result is %i\n", result);
 
 
     printf("done\n");
