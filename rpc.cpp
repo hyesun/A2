@@ -23,7 +23,7 @@ using namespace std;
 #define FAILURE -1
 
 //temp defines
-#define ADDRESS "stephen-Rev-1-0"
+#define ADDRESS "hyesun-ubuntu"
 #define BPORT   19394
 #define SPORT   0
 
@@ -93,6 +93,24 @@ int sizeOfType(int argType)
     }
 }
 
+int getArgType(int *argType)
+{
+    //read the second byte, which is the type
+    return ((*argType) & 0x00FF0000) >> 16;
+}
+
+int getArgLen(int *argType)
+{
+    //read the lower two bytes, which is the arg array size
+    int argSize =  (*argType) & 0x0000FFFF;
+
+    //if it's 0, it means it's a scalar - so set it to size 1
+    if (argSize == 0)
+        argSize = 1;
+
+    return argSize;
+}
+
 int sizeOfArgs(int* argTypes)
 {
     //declare
@@ -104,31 +122,17 @@ int sizeOfArgs(int* argTypes)
     //get size of each element type
     for(int i=0; i<argTypesLen; i++)
     {
-        //read second byte and get size of the type
-        typeSize = (argTypes[i] & 0x00FF0000) >> 16;
-        typeSize = sizeOfType(typeSize);
+        //get size of the type
+        typeSize = sizeOfType(getArgType(argTypes+i));
 
         //read lower two bytes to get low long the arg array is
-        typeLen = (argTypes[i] & 0x0000FFFF);
-
-        //array len of 0 indicates scalar type
-        if(typeLen == 0)
-            typeLen = 1;
+        typeLen = getArgLen(argTypes+i);
 
         //update total length
         totalLen = totalLen + typeSize*typeLen;
     }
 
     return totalLen;
-}
-
-int getArgType(int * argType)
-{
-    int type = -1;
-    type = (unsigned int)(*argType) & 0x00FF0000; //mask it
-    type = type >> 16;
-    cout << "in getArgType:" << type << endl;
-    return type;
 }
 
 int establish(unsigned short portnum, int binder)
@@ -322,7 +326,6 @@ int rpcCall(char* name, int* argTypes, void** args)
     checksum = msglen;
     if (msgtype == LOC_SUCCESS)
     {
-        printf("loc_success\n");
         checksum-=recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
         checksum-=recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
     }
@@ -362,9 +365,7 @@ int rpcCall(char* name, int* argTypes, void** args)
 
     //get message info ready
     int argLenByte = sizeOfArgs(argTypes);    //count how long args is
-    printf("arglenbyte is %i", argLenByte);
     msglen = MAXFNNAME+s_char + argTypesLen*s_int + argLenByte;
-    printf("msglen is %i", msglen);
     msgtype = EXECUTE;
     checksum = sizeof(msglen) + sizeof(msgtype) + msglen;
 
@@ -374,34 +375,16 @@ int rpcCall(char* name, int* argTypes, void** args)
 
     //send the main message
     checksum-=send(serverfd, name, MAXFNNAME+s_char, 0);
-    int test = argTypesLen*s_int;
     checksum-=send(serverfd, argTypes, argTypesLen*s_int, 0);
-/*
-    for(int i=0; i<argTypesLen; i++)
+
+    //send the main message - args
+    for(int i=0; i<argTypesLen-1; i++)  //for each argument
     {
-        printf("argtype %i\n", *(argTypes+i));
+        int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
+        int argLen = getArgLen(argTypes+i);              //arg array length
+        send(serverfd, (void*)args[i], argTypeSize*argLen, 0);
     }
-    cout << "name is " << name << " length is "<< argTypesLen << endl;
-    */
-    for(int i=0; i<argTypesLen-1; i++)
-    {
-//      char a = 'a';
-//      cout << "--------------" << endl;
-//        cout << "ARG ANALYSIS:" << endl;
-//        if (i == 0)
-//        for (int j=0; a != '\0';j++)
-//        {
-//           a = *((char*)(args[i])+j);
-//           cout << a;
-//        }
-        int arr_size;
-        int argsize = lenOfArgTypes(argTypes+i);
-        arr_size = 0xFF & *(argTypes+i);
-        test += arr_size;
-        int arg_type = getArgType(argTypes+i);
-        send(serverfd, (int*)args[i], arr_size*argsize, 0);
-    }
-    cout << "send test: " << test << endl;
+
     printf("rpcCall done\n");
     return SUCCESS;
 }
@@ -488,114 +471,54 @@ int rpcExecute()
     recv(newsockfd, &msglen, sizeof(msglen), 0);
     recv(newsockfd, &msgtype, sizeof(msgtype), 0);
 
-    cout << "rpcExecute msglen is " << msglen << endl;
-
     //prepare argTypes array
     int argsCumulativeSize = msglen-sizeof(fn_name);
-
-    cout << "cum size is " << argsCumulativeSize << endl;
-
     int *argsCumulative = (int*)malloc(argsCumulativeSize);
 
     //read main message
     recv(newsockfd, fn_name, sizeof(fn_name), 0);
     recv(newsockfd, argsCumulative, argsCumulativeSize, MSG_WAITALL);
-    //recv(newsockfd, argsCumulative, 4*4, 0);
-    //recv(newsockfd, argsCumulative+4, argsCumulativeSize-16, 0);
 
-    //unpack argsCumulative
+    //check that i've received correctly
+    for(int i=0; i<4; i++)
+    {
+        cout << argsCumulative[i] << endl;
+    }
+
+    //unpack argsCumulative---------------------------------------------
+
+    //first, see how many args there are
     int argTypesLen = lenOfArgTypes(argsCumulative);
-    cout << "name is " << fn_name << " length is "<< argTypesLen << endl;
-    cout << (unsigned int)(*argsCumulative) << endl;
-    cout << (unsigned int)(*(argsCumulative+1)) << endl;
-    cout << (unsigned int)(*(argsCumulative+2)) << endl;
-    cout << (unsigned int)(*(argsCumulative+3)) << endl;
-    cout << (char)*(char*)(argsCumulative+4) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+1) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+2) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+3) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+4) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+5) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+6) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+7) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+8) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+9) << endl;
-    cout << (char)*(((char*)(argsCumulative+4))+10) << endl;
 
-
+    //figure out argTypes
     int *argTypes = (int*)malloc(argTypesLen*s_int);
     memcpy(argTypes, argsCumulative, argTypesLen*s_int);
 
-    int argsSize = argsCumulativeSize - argTypesLen*s_int;
+    //figure out args
+    int argsSize = argsCumulativeSize - argTypesLen*s_int; //in bytes
     void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
-    //
-    void* argsIndex = argsCumulative+argTypesLen;
-    cout << "argsIndex:" << argsIndex << endl;
-    cout << "argsCumulative+argTypesLen:" << argsCumulative+argTypesLen << endl;
+    void* argsIndex = argsCumulative+argTypesLen;   //point to the correct place
+
     for(int i=0; i<argTypesLen-1; i++)
     {
+        //see what type/len of arg we're dealing with
         int arg_type = getArgType(argTypes+i);
-        int arr_size;
-        arr_size = 0x0000FFFF & *(argTypes+i);
-        cout << "array size" << arr_size << endl;
-        void* args_holder = (void*)malloc((arr_size)*sizeOfType(arg_type));
-        *(args+i) = (args_holder);
-        //cout << "hihi args["<< i << "]:" << args[i] <<endl;
-        //cout << "hihi *args["<< i << "]:" << *(char*)args[i] <<endl;
-        if(arr_size == 0)
-          arr_size = 1;
+        int arg_type_size = sizeOfType(arg_type);
+        int arr_size = getArgLen(argTypes+i);
+
+        //temp holder
+        void* args_holder = (void*)malloc(arr_size*arg_type_size);
+
+        //copy the address
+        *(args+i) = args_holder;
+
+        //copy the contents of array into temp holder
         for(int j=0; j<arr_size; j++)
         {
-            if (arg_type == ARG_CHAR)
-            {
-                cout << "args_holder(argsIndex):" << *(char*)(argsIndex) << endl;
-                //cout << "args_holder(argsCumulative+argTypesLen):" << *((char*)(argsCumulative+argTypesLen)+i+j) << endl;
-                argsIndex = (char*)argsIndex + j;
-                memcpy(args_holder, argsIndex, sizeof(char));
-            }
-            else if (arg_type == ARG_SHORT)
-            {
-                argsIndex = (short*)argsIndex + j;
-                memcpy(args_holder, argsIndex, sizeof(short));
-            }
-            else if (arg_type == ARG_DOUBLE)
-            {
-                argsIndex = (double*)argsIndex + j;
-                memcpy(args_holder, argsIndex, sizeof(double));
-            }
-            else
-            {
-                argsIndex = (int*)argsIndex + j;
-                //int long and float are all same sizes
-                memcpy(args_holder, argsIndex, sizeof(int));
-            }
-
-        }
-        cout << "kwak args["<< i << "]:" << args[i] <<endl;
-        cout << "kwak *args["<< i << "]:" << *(char*)args[i] <<endl;
-//        size of char1
-//        size of short2
-//        size of int4
-//        size of long4
-//        size of double8
-//        size of float4
-
-        //memcpy(args_holder, argsCumulative+argTypesLen+i, sizeof(void*));
-    }
-    for(int i=0; i<argTypesLen-1; i++)
-    {
-        char a = 'a';
-        cout << "++++++++++++++++++" << endl;
-        cout << "ARG ANALYSIS:" << endl;
-        if (i == 0)
-        //for (int j=0; a != '\0';j++)
-        {
-           cout << "args[" << i << "]: " << args[i] << endl;
-           cout << "*args[" << i << "]: " << *(char*)args[i] << endl;
+            memcpy(args_holder, argsIndex, arg_type_size);
+            argsIndex = (void*)((char*)argsIndex + arg_type_size);
         }
     }
-    cout << "*args[0]:" << *((char*)(args[0])) << endl;
-    printf("memcpy complete\n");
 
     //send it to skel
     for(int i=0; i<database.size(); i++)
@@ -605,20 +528,17 @@ int rpcExecute()
         if (a == b)
         {
             printf("match found in database\n");
-//            cout << "fn name " << database[i].fn_name << endl;
-//            for(int j=0; j<argTypesLen-1; j++)
-//            {
-//                cout << "address of *(args+" << j << ")"<< args+j << endl;
-//                cout << "value of *(args+" << j << ")"<< *(args+j) << endl;
-//                cout << "value of **(args+" << j << ")"<< *((int*)*(args+j)) << endl;
-//            }
             database[i].fn_skel(argTypes, args);
         }
     }
 
     //get the computation result, which is the first arg
-    int result = *((int*)args[0]);
-    printf("result is %i\n", result);
+    //int result = *((int*)args[0]);
+    char *result = (char *)malloc(100 * sizeof(char));
+    result = (char *)(args[0]);
+    printf("result is %s\n", result);
+
+    //send the result back
 
 
     printf("done\n");
