@@ -530,40 +530,49 @@ int rpcExecute()
     void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
     //
     void* argsIndex = argsCumulative+argTypesLen;
+    cout << "argsIndex:" << argsIndex << endl;
+    cout << "argsCumulative+argTypesLen:" << argsCumulative+argTypesLen << endl;
     for(int i=0; i<argTypesLen-1; i++)
     {
-        int arr_size;
-        arr_size = 0xFF & *(argTypes+i);
-        //cout << "array size" << arr_size << endl;
-        void* args_holder = (void*)malloc((arr_size)*sizeof(void*));
-        *(args+i) = (args_holder+i*sizeof(void*));
-        cout<< "argTypes:" << *argTypes << endl;
         int arg_type = getArgType(argTypes+i);
+        int arr_size;
+        arr_size = 0x0000FFFF & *(argTypes+i);
+        cout << "array size" << arr_size << endl;
+        void* args_holder = (void*)malloc((arr_size)*sizeOfType(arg_type));
+        *(args+i) = (args_holder);
+        //cout << "hihi args["<< i << "]:" << args[i] <<endl;
+        //cout << "hihi *args["<< i << "]:" << *(char*)args[i] <<endl;
+        if(arr_size == 0)
+          arr_size = 1;
         for(int j=0; j<arr_size; j++)
         {
             if (arg_type == ARG_CHAR)
             {
-                cout << "args_holder:" << *((char*)(argsCumulative+argTypesLen)+i+j) << endl;
-                memcpy(args_holder, argsIndex+i+j, sizeof(void*));
-                argsIndex = ((char*)argsIndex)+1;
+                cout << "args_holder(argsIndex):" << *(char*)(argsIndex) << endl;
+                //cout << "args_holder(argsCumulative+argTypesLen):" << *((char*)(argsCumulative+argTypesLen)+i+j) << endl;
+                argsIndex = (char*)argsIndex + j;
+                memcpy(args_holder, argsIndex, sizeof(char));
             }
             else if (arg_type == ARG_SHORT)
             {
-                memcpy(args_holder, argsIndex+i+j, sizeof(void*));
-                argsIndex = ((short*)argsIndex)+1;
+                argsIndex = (short*)argsIndex + j;
+                memcpy(args_holder, argsIndex, sizeof(short));
             }
             else if (arg_type == ARG_DOUBLE)
             {
-                memcpy(args_holder, argsCumulative+argTypesLen+i+j, sizeof(void*));
-                argsIndex = ((double*)argsIndex)+1;
+                argsIndex = (double*)argsIndex + j;
+                memcpy(args_holder, argsIndex, sizeof(double));
             }
             else
             {
+                argsIndex = (int*)argsIndex + j;
                 //int long and float are all same sizes
-                memcpy(args_holder, argsCumulative+argTypesLen+i+j, sizeof(void*));
-                argsIndex = ((int*)argsIndex)+1;
+                memcpy(args_holder, argsIndex, sizeof(int));
             }
+
         }
+        cout << "kwak args["<< i << "]:" << args[i] <<endl;
+        cout << "kwak *args["<< i << "]:" << *(char*)args[i] <<endl;
 //        size of char1
 //        size of short2
 //        size of int4
@@ -572,6 +581,18 @@ int rpcExecute()
 //        size of float4
 
         //memcpy(args_holder, argsCumulative+argTypesLen+i, sizeof(void*));
+    }
+    for(int i=0; i<argTypesLen-1; i++)
+    {
+        char a = 'a';
+        cout << "++++++++++++++++++" << endl;
+        cout << "ARG ANALYSIS:" << endl;
+        if (i == 0)
+        //for (int j=0; a != '\0';j++)
+        {
+           cout << "args[" << i << "]: " << args[i] << endl;
+           cout << "*args[" << i << "]: " << *(char*)args[i] << endl;
+        }
     }
     cout << "*args[0]:" << *((char*)(args[0])) << endl;
     printf("memcpy complete\n");
