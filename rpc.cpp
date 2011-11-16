@@ -398,9 +398,45 @@ int rpcCall(char* name, int* argTypes, void** args)
         int typeSize = (*(argTypes + i)) & 0x00FF0000 >> 16;
         typeSize = sizeOfType(typeSize);
         arr_size = 0xFF & *(argTypes+i);
+        if (arr_size == 0)
+          arr_size = 1;
         test += arr_size;
         int arg_type = getArgType(argTypes+i);
         send(serverfd, (int*)args[i], arr_size*typeSize, 0);
+    }
+    for(int i=0; i<argTypesLen-1; i++)
+    {
+        int arg_type = getArgType(argTypes+i);
+        int arr_size = 0xFF & *(argTypes+i);
+        cout << "------------------" << endl;
+        cout << "ARG ANALYSIS:" << endl;
+        if (arr_size == 0)
+          arr_size = 1;
+        cout << "arr size:" << arr_size <<endl;
+        if (arg_type == ARG_CHAR)
+        {
+          for (int j=0; *((char*)args[i]+j) != '\0';j++)
+          {
+             cout << "args[" << i << "]: " << args[i] << endl;
+             cout << "*args[" << i << "]: " << *((char*)args[i]+j) << endl;
+          }
+        }
+        else if(arg_type == ARG_FLOAT)
+        {
+          for (int j=0; j < arr_size;j++)
+          {
+             cout << "args[" << i << "]: " << args[i] << endl;
+             cout << "*args[" << i << "]: " << *((float*)args[i]+j) << endl;
+          }
+        }
+        else if(arg_type == ARG_DOUBLE)
+        {
+          for (int j=0; j < arr_size;j++)
+          {
+             cout << "args[" << i << "]: " << args[i] << endl;
+             cout << "*args[" << i << "]: " << *((double*)args[i]+j) << endl;
+          }
+        }
     }
     cout << "send test: " << test << endl;
     printf("rpcCall done\n");
@@ -549,11 +585,7 @@ int rpcExecute()
         {
             if (arg_type == ARG_CHAR)
             {
-                //cout << "args_holder(argsCumulative+argTypesLen):" << *((char*)(argsCumulative+argTypesLen)+i+j) << endl;
-
                 memcpy((char*)args_holder+j, argsIndex, sizeof(char));
-                //cout << "&args_holder(argsIndex):" << args_holder+j << endl;
-                //cout << "args_holder(argsIndex):" << *((char*)(args_holder)+j) << endl;
                 argsIndex = (char*)argsIndex + 1;
             }
             else if (arg_type == ARG_SHORT)
@@ -564,37 +596,51 @@ int rpcExecute()
             else if (arg_type == ARG_DOUBLE)
             {
                 memcpy((double*)args_holder+j, argsIndex, sizeof(double));
+                cout << "*ARGSINDEX double: "<< *(double*)argsIndex << endl;
                 argsIndex = (double*)argsIndex + 1;
             }
             else
             {
                 //int long and float are all same sizes
                 memcpy((int*)args_holder+j, argsIndex, sizeof(int));
+                cout << "*ARGSINDEX float: "<< *(float*)argsIndex << endl;
                 argsIndex = (int*)argsIndex + 1;
             }
 
         }
-        cout << "kwak args["<< i << "]:" << args[i] <<endl;
-        cout << "kwak *args["<< i << "]:" << *(char*)args[i] <<endl;
-//        size of char1
-//        size of short2
-//        size of int4
-//        size of long4
-//        size of double8
-//        size of float4
-
-        //memcpy(args_holder, argsCumulative+argTypesLen+i, sizeof(void*));
     }
     for(int i=0; i<argTypesLen-1; i++)
     {
-        char a = 'a';
+        int arg_type = getArgType(argTypes+i);
+        int arr_size = 0xFF & *(argTypes+i);
         cout << "++++++++++++++++++" << endl;
         cout << "ARG ANALYSIS:" << endl;
-        if (i == 0)
-        //for (int j=0; a != '\0';j++)
+        if (arr_size == 0)
+          arr_size = 1;
+        cout << "arr size:" << arr_size <<endl;
+        if (arg_type == ARG_CHAR)
         {
-           cout << "args[" << i << "]: " << args[i] << endl;
-           cout << "*args[" << i << "]: " << *(char*)args[i] << endl;
+          for (int j=0; *((char*)args[i]+j) != '\0';j++)
+          {
+             cout << "args[" << i << "]: " << args[i] << endl;
+             cout << "*args[" << i << "]: " << *((char*)args[i]+j) << endl;
+          }
+        }
+        else if(arg_type == ARG_FLOAT)
+        {
+          for (int j=0; j < arr_size;j++)
+          {
+             cout << "args[" << i << "]: " << args[i] << endl;
+             cout << "*args[" << i << "]: " << *((float*)args[i]+j) << endl;
+          }
+        }
+        else if(arg_type == ARG_DOUBLE)
+        {
+          for (int j=0; j < arr_size;j++)
+          {
+             cout << "args[" << i << "]: " << args[i] << endl;
+             cout << "*args[" << i << "]: " << *((double*)args[i]+j) << endl;
+          }
         }
     }
     cout << "*args[0]:" << *((char*)(args[0])) << endl;
