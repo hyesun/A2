@@ -308,48 +308,33 @@ int rpcCall(char* name, int* argTypes, void** args)
     int argTypesLen = lenOfArgTypes(argTypes);
     int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
     int msgtype = LOC_REQUEST;
-    int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
 
     //first send msglen and msgtype
-    checksum-=send(binderfd, &msglen, sizeof(msglen), 0);
-    checksum-=send(binderfd, &msgtype, sizeof(msgtype), 0);
+    send(binderfd, &msglen, sizeof(msglen), 0);
+    send(binderfd, &msgtype, sizeof(msgtype), 0);
 
     //send the main message
-    checksum-=send(binderfd, name, MAXFNNAME+s_char, 0);
-    checksum-=send(binderfd, argTypes, argTypesLen*s_int, 0);
-
-    //check that all bytes have been sent
-    if (checksum != 0)
-    {
-        printf("ERROR in rpcCall()\n");
-        return FAILURE;
-    }
+    send(binderfd, name, MAXFNNAME+s_char, 0);
+    send(binderfd, argTypes, argTypesLen*s_int, 0);
 
     //get binder's reply
     recv(binderfd, &msglen, sizeof(msglen), 0);
     recv(binderfd, &msgtype, sizeof(msgtype), 0);
-    checksum = msglen;
+
     if (msgtype == LOC_SUCCESS)
     {
-        checksum-=recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
-        checksum-=recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
+        recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
+        recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
     }
     else if(msgtype == LOC_FAILURE)
     {
         int reasonCode;
-        checksum-=recv(binderfd, &reasonCode, sizeof(reasonCode), 0);
+        recv(binderfd, &reasonCode, sizeof(reasonCode), 0);
         cout << "LOC_FAILURE. reasoncode = " << reasonCode << endl;
         close(binderfd);
         return reasonCode;
     }
     else
-    {
-        printf("ERROR in rpcCall()\n");
-        return FAILURE;
-    }
-
-    //check that all bytes have been read
-    if (checksum != 0)
     {
         printf("ERROR in rpcCall()\n");
         return FAILURE;
@@ -374,15 +359,14 @@ int rpcCall(char* name, int* argTypes, void** args)
     int argLenByte = sizeOfArgs(argTypes);    //count how long args is
     msglen = MAXFNNAME+s_char + argTypesLen*s_int + argLenByte;
     msgtype = EXECUTE;
-    checksum = sizeof(msglen) + sizeof(msgtype) + msglen;
 
     //first send msglen and msgtype
-    checksum-=send(serverfd, &msglen, sizeof(msglen), 0);
-    checksum-=send(serverfd, &msgtype, sizeof(msgtype), 0);
+    send(serverfd, &msglen, sizeof(msglen), 0);
+    send(serverfd, &msgtype, sizeof(msgtype), 0);
 
     //send the main message
-    checksum-=send(serverfd, name, MAXFNNAME+s_char, 0);
-    checksum-=send(serverfd, argTypes, argTypesLen*s_int, 0);
+    send(serverfd, name, MAXFNNAME+s_char, 0);
+    send(serverfd, argTypes, argTypesLen*s_int, 0);
 
     //send the main message - args
     for(int i=0; i<argTypesLen-1; i++)  //for each argument
@@ -444,29 +428,19 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     //type of message is REGISTER
     int msgtype = REGISTER;
 
-    //for checking send success
-    int checksum = msglen + sizeof(msglen) + sizeof(msgtype);
-
     //================================================================
     //SEND TO BINDER
     //================================================================
 
     //first two bytes are always length and type
-    checksum-=send(binderfd, &msglen, sizeof(msglen), 0);
-    checksum-=send(binderfd, &msgtype, sizeof(msgtype), 0);
+    send(binderfd, &msglen, sizeof(msglen), 0);
+    send(binderfd, &msgtype, sizeof(msgtype), 0);
 
     //send the four components of the message (DON'T do sizeof() for name and argTypes)
-    checksum-=send(binderfd, server_address, sizeof(server_address), 0);
-    checksum-=send(binderfd, &port, sizeof(port), 0);
-    checksum-=send(binderfd, name, MAXFNNAME+s_char, 0);
-    checksum-=send(binderfd, argTypes, argTypesLen*s_int, 0);
-
-    //make sure everything was successful
-    if (checksum != 0)
-    {
-        printf("ERROR in rpcRegister()\n");
-        return FAILURE;
-    }
+    send(binderfd, server_address, sizeof(server_address), 0);
+    send(binderfd, &port, sizeof(port), 0);
+    send(binderfd, name, MAXFNNAME+s_char, 0);
+    send(binderfd, argTypes, argTypesLen*s_int, 0);
 
     //================================================================
     //GET BINDER REPLY
@@ -474,12 +448,8 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
     //get binder reply
     int reply=FAILURE;
-    checksum=recv(binderfd, &reply, sizeof(reply), 0);
-    if (checksum != sizeof(reply))
-    {
-        printf("ERROR in rpcRegister()\n");
-        return FAILURE;
-    }
+    recv(binderfd, &reply, sizeof(reply), 0);
+
     if(reply != SUCCESS)
     {
         printf("ERROR in rpcRegister()\n");
@@ -506,7 +476,7 @@ int rpcExecute()
     while(1)
     {
         //declare
-        int checksum, msglen, msgtype;
+        int msglen, msgtype;
         char fn_name[MAXFNNAME+s_char];
 
         //================================================================
@@ -621,5 +591,15 @@ int rpcExecute()
 int rpcTerminate()
 {
     printf("rpcTerminate\n");
+
+    //prepare message
+    int msglen = 0;
+    int msgtype = TERMINATE;
+
+    //send it to binder
+    send(binderfd, &msglen, sizeof(msglen), 0);
+    send(binderfd, &msgtype, sizeof(msgtype), 0);
+
+    printf("rpcTerminate done\n");
     return SUCCESS;
 }
