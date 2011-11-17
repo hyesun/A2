@@ -24,7 +24,7 @@ using namespace std;
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu"
-#define BPORT   19322
+#define BPORT   31234
 #define SPORT   0
 
 //message types
@@ -392,31 +392,12 @@ int rpcCall(char* name, int* argTypes, void** args)
     recv(serverfd, &msgtype, sizeof(msgtype), 0);
     recv(serverfd, fn_name, sizeof(fn_name), 0);
     recv(serverfd, argTypes, argTypesLen*s_int, 0);
-
-    recv(serverfd, (char*)args[0], 100, 0);
-
-    /*
-    //get args back
     for(int i=0; i<argTypesLen-1; i++)  //for each argument
     {
         int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
         int argLen = getArgLen(argTypes+i);              //arg array length
-        send(serverfd, (void*)args[i], argTypeSize*argLen, 0);
+        recv(serverfd, args[i], argTypeSize*argLen, 0);
     }
-    */
-
-    cout << msglen << endl;
-    cout << msgtype << endl;
-    cout << fn_name << endl;
-    for(int i=0; i<4; i++)
-    {
-        cout << argTypes[i] << endl;
-    }
-
-    //get the computation result, which is the first arg
-    char *result = (char *)malloc(100 * sizeof(char));
-    result = (char *)(args[0]);
-    printf("result is %s\n", result);
 
     printf("rpcCall done\n");
     return SUCCESS;
@@ -493,104 +474,102 @@ int rpcExecute()
 {
     printf("rpcExecute\n");
 
-    //declare
-    int checksum, msglen, msgtype;
-    char fn_name[MAXFNNAME+s_char];
-
-    //wait for client to call my socket
-    int newsockfd = get_connection(clientfd);
-
-    //read length and type
-    recv(newsockfd, &msglen, sizeof(msglen), 0);
-    recv(newsockfd, &msgtype, sizeof(msgtype), 0);
-
-    //prepare argTypes array
-    int argsCumulativeSize = msglen-sizeof(fn_name);
-    int *argsCumulative = (int*)malloc(argsCumulativeSize);
-
-    //read main message
-    recv(newsockfd, fn_name, sizeof(fn_name), 0);
-    recv(newsockfd, argsCumulative, argsCumulativeSize, MSG_WAITALL);
-
-    //check that i've received correctly
-    for(int i=0; i<4; i++)
+    while(1)
     {
-        cout << argsCumulative[i] << endl;
-    }
+        //declare
+        int checksum, msglen, msgtype;
+        char fn_name[MAXFNNAME+s_char];
 
-    //unpack argsCumulative---------------------------------------------
+        //wait for client to call my socket
+        int newsockfd = get_connection(clientfd);
 
-    //first, see how many args there are
-    int argTypesLen = lenOfArgTypes(argsCumulative);
+        //read length and type
+        recv(newsockfd, &msglen, sizeof(msglen), 0);
+        recv(newsockfd, &msgtype, sizeof(msgtype), 0);
 
-    //figure out argTypes
-    int *argTypes = (int*)malloc(argTypesLen*s_int);
-    memcpy(argTypes, argsCumulative, argTypesLen*s_int);
+        //prepare argTypes array
+        int argsCumulativeSize = msglen-sizeof(fn_name);
+        int *argsCumulative = (int*)malloc(argsCumulativeSize);
 
-    //figure out args
-    int argsSize = argsCumulativeSize - argTypesLen*s_int; //in bytes
-    void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
-    void* argsIndex = argsCumulative+argTypesLen;   //point to the correct place
+        //read main message
+        recv(newsockfd, fn_name, sizeof(fn_name), 0);
+        recv(newsockfd, argsCumulative, argsCumulativeSize, MSG_WAITALL);
 
-    for(int i=0; i<argTypesLen-1; i++)
-    {
-        //see what type/len of arg we're dealing with
-        int arg_type = getArgType(argTypes+i);
-        int arg_type_size = sizeOfType(arg_type);
-        int arr_size = getArgLen(argTypes+i);
-
-        //temp holder
-        void* args_holder = (void*)malloc(arr_size*arg_type_size);
-
-        //copy the address
-        *(args+i) = args_holder;
-
-        //copy the contents of array into temp holder
-        for(int j=0; j<arr_size; j++)
+        //check that i've received correctly
+        for(int i=0; i<4; i++)
         {
-            void* temp = (char*)args_holder+j*arg_type_size;
-            memcpy(temp, argsIndex, arg_type_size);
-            argsIndex = (void*)((char*)argsIndex + arg_type_size);
+            cout << argsCumulative[i] << endl;
         }
-    }
 
-    int executionResult = FAILURE;
+        //unpack argsCumulative---------------------------------------------
 
-    //send it to skel
-    for(int i=0; i<database.size(); i++)
-    {
-        string a = database[i].fn_name;
-        string b = fn_name;
-        if (a == b)
+        //first, see how many args there are
+        int argTypesLen = lenOfArgTypes(argsCumulative);
+
+        //figure out argTypes
+        int *argTypes = (int*)malloc(argTypesLen*s_int);
+        memcpy(argTypes, argsCumulative, argTypesLen*s_int);
+
+        //figure out args
+        int argsSize = argsCumulativeSize - argTypesLen*s_int; //in bytes
+        void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
+        void* argsIndex = argsCumulative+argTypesLen;   //point to the correct place
+
+        for(int i=0; i<argTypesLen-1; i++)
         {
-            printf("match found in database\n");
-            executionResult = database[i].fn_skel(argTypes, args);
+            //see what type/len of arg we're dealing with
+            int arg_type = getArgType(argTypes+i);
+            int arg_type_size = sizeOfType(arg_type);
+            int arr_size = getArgLen(argTypes+i);
+
+            //temp holder
+            void* args_holder = (void*)malloc(arr_size*arg_type_size);
+
+            //copy the address
+            *(args+i) = args_holder;
+
+            //copy the contents of array into temp holder
+            for(int j=0; j<arr_size; j++)
+            {
+                void* temp = (char*)args_holder+j*arg_type_size;
+                memcpy(temp, argsIndex, arg_type_size);
+                argsIndex = (void*)((char*)argsIndex + arg_type_size);
+            }
         }
+
+        int executionResult = FAILURE;
+
+        //send it to skel
+        for(int i=0; i<database.size(); i++)
+        {
+            string a = database[i].fn_name;
+            string b = fn_name;
+            if (a == b)
+            {
+                printf("match found in database\n");
+                executionResult = database[i].fn_skel(argTypes, args);
+            }
+        }
+
+        //send the result back
+        send(newsockfd, &msglen, sizeof(msglen), 0);
+        send(newsockfd, &msgtype, sizeof(msgtype), 0);
+        send(newsockfd, fn_name, sizeof(fn_name), 0);
+        send(newsockfd, argTypes, argTypesLen*s_int, 0);
+        for(int i=0; i<argTypesLen-1; i++)  //for each argument
+        {
+            int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
+            int argLen = getArgLen(argTypes+i);              //arg array length
+            send(newsockfd, args[i], argTypeSize*argLen, 0);
+        }
+
+        //get the computation result, which is the first arg
+        char *result = (char *)malloc(100 * sizeof(char));
+        result = (char *)(args[0]);
+        printf("result is %s\n", result);
     }
 
-    //get the computation result, which is the first arg
-    char *result = (char *)malloc(100 * sizeof(char));
-    result = (char *)(args[0]);
-    printf("result is %s\n", result);
-
-    //send the result back
-    send(newsockfd, &msglen, sizeof(msglen), 0);
-    send(newsockfd, &msgtype, sizeof(msgtype), 0);
-    send(newsockfd, fn_name, sizeof(fn_name), 0);
-    send(newsockfd, argTypes, argTypesLen*s_int, 0);
-
-    send(newsockfd, (char*)args[0], 100, 0);
-    /*
-    //send the main message - args
-    for(int i=0; i<argTypesLen-1; i++)  //for each argument
-    {
-        int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
-        int argLen = getArgLen(argTypes+i);              //arg array length
-        send(newsockfd, (void*)args[i], argTypeSize*argLen, 0);
-    }
-    */
-
-    printf("done\n");
+    printf("rpcExecute done\n");
     return SUCCESS;
 }
 
