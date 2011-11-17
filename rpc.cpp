@@ -25,7 +25,7 @@ using namespace std;
 #define NUMTHREADS 3
 
 //temp defines
-#define ADDRESS "hyesun-ubuntu"
+#define ADDRESS "stephen-Rev-1-0"
 #define BPORT   39283
 #define SPORT   0
 
