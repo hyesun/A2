@@ -25,8 +25,8 @@ using namespace std;
 #define NUMTHREADS 3
 
 //temp defines
-#define ADDRESS "stephen-Rev-1-0"
-#define BPORT   39283
+//#define ADDRESS "hyesun-ubuntu"
+#define BPORT   0
 #define SPORT   0
 
 //create threads on stack
@@ -263,7 +263,7 @@ int call_socket(char *hostname, int portnum)
 //  MAIN FUNCTIONS
 //================================================================
 
-int rpcInit()
+int rpcInit()   //called by server
 {
     printf("rpcInit\n");
 
@@ -276,8 +276,8 @@ int rpcInit()
     }
 
     //open a connection to binder, for sending register request. keep this open
-    char* binder_address = (char*)ADDRESS;  //getenv("BINDER_ADDRESS");
-    int binder_port=BPORT; //getenv("BINDER_PORT");
+    char* binder_address = getenv("BINDER_ADDRESS");
+    int binder_port= atoi(getenv("BINDER_PORT"));
 
     //connect to the binder
     binderfd=call_socket(binder_address, binder_port);
@@ -291,7 +291,7 @@ int rpcInit()
     return SUCCESS;
 }
 
-int rpcCall(char* name, int* argTypes, void** args)
+int rpcCall(char* name, int* argTypes, void** args) //called by client
 {
     printf("rpcCall\n");
 
@@ -299,12 +299,16 @@ int rpcCall(char* name, int* argTypes, void** args)
     char fn_server_address[MAXHOSTNAME + 1];
     int fn_server_port;
 
+    //get binder info
+    char* binder_address = getenv("BINDER_ADDRESS");
+    int binder_port= atoi(getenv("BINDER_PORT"));
+
     //================================================================
     //SEND BINDER LOC_REQUEST
     //================================================================
 
     //connect to binder
-    binderfd=call_socket((char*)ADDRESS, BPORT);
+    binderfd=call_socket(binder_address, binder_port);
     if (binderfd < 0)
     {
         printf("call socket error: %i\n", binderfd);
@@ -337,7 +341,6 @@ int rpcCall(char* name, int* argTypes, void** args)
     {
         int reasonCode;
         recv(binderfd, &reasonCode, sizeof(reasonCode), 0);
-        cout << "LOC_FAILURE. reasoncode = " << reasonCode << endl;
         close(binderfd);
         return reasonCode;
     }
@@ -346,6 +349,9 @@ int rpcCall(char* name, int* argTypes, void** args)
         printf("ERROR in rpcCall()\n");
         return FAILURE;
     }
+
+    //done with binder
+    close(binderfd);
 
     //================================================================
     //SEND SERVER EXECUTE
@@ -404,6 +410,7 @@ int rpcCall(char* name, int* argTypes, void** args)
     {
         int reasonCode;
         recv(serverfd, &reasonCode, sizeof(reasonCode), 0);
+        close(serverfd);
         return reasonCode;
     }
     else //what happened??
@@ -411,11 +418,14 @@ int rpcCall(char* name, int* argTypes, void** args)
         printf("rpcCall error\n");
     }
 
+    //done with server
+    close(serverfd);
+
     printf("rpcCall done\n");
     return SUCCESS;
 }
 
-int rpcRegister(char* name, int* argTypes, skeleton f)
+int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
 {
     printf("rpcRegister\n");
 
@@ -615,22 +625,22 @@ int rpcExecute()
 {
     printf("rpcExecute\n");
 
-    //getClientRequest
-    if(pthread_create(&threads[0], NULL, getClientRequest, NULL))
-    {
-        printf("ERROR creating thread %d", 0);
-        exit(-1);
-    }
-
     //listenForTerminate
-    if(pthread_create(&threads[1], NULL, listenForTerminate, NULL))
+    if(pthread_create(&threads[0], NULL, listenForTerminate, NULL))
     {
         printf("ERROR creating thread %d", 1);
         exit(-1);
     }
 
-    pthread_join(threads[1], NULL);
+    //getClientRequest
+    if(pthread_create(&threads[1], NULL, getClientRequest, NULL))
+    {
+        printf("ERROR creating thread %d", 0);
+        exit(-1);
+    }
+
     pthread_join(threads[0], NULL);
+    pthread_join(threads[1], NULL);
 
     printf("rpcExecute done\n");
     return SUCCESS;
@@ -643,6 +653,18 @@ int rpcTerminate()
     //prepare message
     int msglen = 0;
     int msgtype = TERMINATE;
+
+    //open a connection to binder, for sending register request. keep this open
+    char* binder_address = getenv("BINDER_ADDRESS");
+    int binder_port= atoi(getenv("BINDER_PORT"));
+
+    //connect to the binder
+    binderfd=call_socket(binder_address, binder_port);
+    if (binderfd < 0)
+    {
+        printf("call socket error: %i\n", binderfd);
+        return binderfd;
+    }
 
     //send it to binder
     send(binderfd, &msglen, sizeof(msglen), MSG_WAITALL);
