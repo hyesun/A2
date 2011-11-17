@@ -25,16 +25,20 @@ typedef struct
 
 vector<data_point> DataBase;
 
-//helper functions
+int serverfd;
 
-int function()
-{
-    return 0;
-}
+//helper functions
 
 int terminate_server()
 {
-    printf("terminate\n");
+    printf("terminate_Server()\n");
+
+    int msglen=0;
+    int msgtype=TERMINATE;
+
+    send(serverfd, &msglen, sizeof(msglen), 0);
+    send(serverfd, &msgtype, sizeof(msgtype), 0);
+
     return 0;
 }
 
@@ -72,6 +76,8 @@ void binder_register(int socketfd, int msglen)
             - sizeof(fn_name); //yes
     unsigned int* argType = (unsigned int*) malloc(argTypesLen);
 
+
+    serverfd = socketfd;
     //receive the message
     int checksum = msglen;
     checksum -= recv(socketfd, server_address, sizeof(server_address), 0);
@@ -275,15 +281,23 @@ int main()
                     }
                     else if (msgtype == TERMINATE)
                     {
+                        printf("got terminate message\n");
+
                         terminate_server();
+                        printf("sent terminate message to server complete\n");
+
+                        exit(0);
                     }
 
+                    /*
                     if (status <= 0)
                     {
                         cout << "terminating:" << socketfd << endl;
                         close(socketfd); // bye!
                         FD_CLR(socketfd, &master); // remove from master set
                     }
+                    */
+
                     //cleanup
                     //free(buffer);
                 } // END handle data from client

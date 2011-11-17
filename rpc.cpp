@@ -26,7 +26,7 @@ using namespace std;
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu"
-#define BPORT   31234
+#define BPORT   39283
 #define SPORT   0
 
 //create threads on stack
@@ -54,6 +54,7 @@ typedef struct
 }dataentry;
 
 //global variables
+int die = 0;
 int binder;
 int binderfd, clientfd;
 int port;
@@ -346,9 +347,6 @@ int rpcCall(char* name, int* argTypes, void** args)
         return FAILURE;
     }
 
-    //done with binder
-    close(binderfd);
-
     //================================================================
     //SEND SERVER EXECUTE
     //================================================================
@@ -586,6 +584,11 @@ void* getClientRequest(void* arg)
         {
             printf("rpcExecute error\n");
         }
+        if(die==1)
+        {
+            printf("terminating clientrequest thread\n");
+            exit(0);
+        }
     }
 }
 
@@ -594,7 +597,17 @@ void* listenForTerminate(void *arg)
     while(1)
     {
         //listen for termination from binder
-        printf("terminating!\n");
+        int msglen, msgtype;
+        recv(binderfd, &msglen, sizeof(msglen), 0);
+        recv(binderfd, &msgtype, sizeof(msgtype), 0);
+
+        if (msgtype == TERMINATE)
+        {
+            printf("terminate recieved\n");
+            die = 1;
+            exit(0);
+        }
+
     }
 }
 
@@ -616,6 +629,9 @@ int rpcExecute()
         exit(-1);
     }
 
+    pthread_join(threads[1], NULL);
+    pthread_join(threads[0], NULL);
+
     printf("rpcExecute done\n");
     return SUCCESS;
 }
@@ -629,8 +645,8 @@ int rpcTerminate()
     int msgtype = TERMINATE;
 
     //send it to binder
-    send(binderfd, &msglen, sizeof(msglen), 0);
-    send(binderfd, &msgtype, sizeof(msgtype), 0);
+    send(binderfd, &msglen, sizeof(msglen), MSG_WAITALL);
+    send(binderfd, &msgtype, sizeof(msgtype), MSG_WAITALL);
 
     printf("rpcTerminate done\n");
     return SUCCESS;
