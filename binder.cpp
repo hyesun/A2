@@ -13,12 +13,6 @@ using namespace std;
 #include "rpc.h"
 #include "rpc.cpp"
 
-//perm defines
-#define NUMTHREADS 2
-#define SERVER_THREAD 0
-#define CLIENT_THREAD 1
-#define MAX_NUM_REGISTERS 100
-
 //message struct
 typedef struct
 {

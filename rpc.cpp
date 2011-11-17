@@ -11,6 +11,7 @@ using namespace std;
 #include <vector>
 #include <string>
 #include <strings.h>
+#include <pthread.h>
 #include "rpc.h"
 
 //perm defines
@@ -21,11 +22,16 @@ using namespace std;
 #define s_int 4         //size of int in bytes
 #define SUCCESS  0
 #define FAILURE -1
+#define NUMTHREADS 3
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu"
 #define BPORT   31234
 #define SPORT   0
+
+//create threads on stack
+pthread_t threads[NUMTHREADS];
+pthread_mutex_t mutexsum;
 
 //message types
 enum message_type
@@ -469,15 +475,13 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
     return SUCCESS;
 }
 
-int rpcExecute()
+void* getClientRequest(void* arg)
 {
-    printf("rpcExecute\n");
-
-    while(1)
+    while (1)
     {
         //declare
         int msglen, msgtype;
-        char fn_name[MAXFNNAME+s_char];
+        char fn_name[MAXFNNAME + s_char];
 
         //================================================================
         //RECV FROM CLIENT
@@ -491,8 +495,8 @@ int rpcExecute()
         recv(newsockfd, &msgtype, sizeof(msgtype), 0);
 
         //prepare argTypes array
-        int argsCumulativeSize = msglen-sizeof(fn_name);
-        int *argsCumulative = (int*)malloc(argsCumulativeSize);
+        int argsCumulativeSize = msglen - sizeof(fn_name);
+        int *argsCumulative = (int*) malloc(argsCumulativeSize);
 
         //read main message
         recv(newsockfd, fn_name, sizeof(fn_name), 0);
@@ -506,33 +510,33 @@ int rpcExecute()
         int argTypesLen = lenOfArgTypes(argsCumulative);
 
         //figure out argTypes
-        int *argTypes = (int*)malloc(argTypesLen*s_int);
-        memcpy(argTypes, argsCumulative, argTypesLen*s_int);
+        int *argTypes = (int*) malloc(argTypesLen * s_int);
+        memcpy(argTypes, argsCumulative, argTypesLen * s_int);
 
         //figure out args
-        int argsSize = argsCumulativeSize - argTypesLen*s_int; //in bytes
-        void** args = (void**)malloc((argTypesLen-1)*sizeof(void*));
-        void* argsIndex = argsCumulative+argTypesLen;   //point to the correct place
+        int argsSize = argsCumulativeSize - argTypesLen * s_int; //in bytes
+        void** args = (void**) malloc((argTypesLen - 1) * sizeof(void*));
+        void* argsIndex = argsCumulative + argTypesLen; //point to the correct place
 
-        for(int i=0; i<argTypesLen-1; i++)
+        for (int i = 0; i < argTypesLen - 1; i++)
         {
             //see what type/len of arg we're dealing with
-            int arg_type = getArgType(argTypes+i);
+            int arg_type = getArgType(argTypes + i);
             int arg_type_size = sizeOfType(arg_type);
-            int arr_size = getArgLen(argTypes+i);
+            int arr_size = getArgLen(argTypes + i);
 
             //temp holder
-            void* args_holder = (void*)malloc(arr_size*arg_type_size);
+            void* args_holder = (void*) malloc(arr_size * arg_type_size);
 
             //copy the address
-            *(args+i) = args_holder;
+            *(args + i) = args_holder;
 
             //copy the contents of array into temp holder
-            for(int j=0; j<arr_size; j++)
+            for (int j = 0; j < arr_size; j++)
             {
-                void* temp = (char*)args_holder+j*arg_type_size;
+                void* temp = (char*) args_holder + j * arg_type_size;
                 memcpy(temp, argsIndex, arg_type_size);
-                argsIndex = (void*)((char*)argsIndex + arg_type_size);
+                argsIndex = (void*) ((char*) argsIndex + arg_type_size);
             }
         }
 
@@ -541,7 +545,7 @@ int rpcExecute()
         //================================================================
 
         int executionResult = FAILURE;
-        for(int i=0; i<database.size(); i++)
+        for (int i = 0; i < database.size(); i++)
         {
             string a = database[i].fn_name;
             string b = fn_name;
@@ -555,21 +559,21 @@ int rpcExecute()
         //SEND THE RESULTS BACK TO CLIENT
         //================================================================
 
-        if(executionResult == SUCCESS)
+        if (executionResult == SUCCESS)
         {
             msgtype = EXECUTE_SUCCESS;
             send(newsockfd, &msglen, sizeof(msglen), 0);
             send(newsockfd, &msgtype, sizeof(msgtype), 0);
             send(newsockfd, fn_name, sizeof(fn_name), 0);
-            send(newsockfd, argTypes, argTypesLen*s_int, 0);
-            for(int i=0; i<argTypesLen-1; i++)  //for each argument
+            send(newsockfd, argTypes, argTypesLen * s_int, 0);
+            for (int i = 0; i < argTypesLen - 1; i++) //for each argument
             {
-                int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
-                int argLen = getArgLen(argTypes+i);              //arg array length
-                send(newsockfd, args[i], argTypeSize*argLen, 0);
+                int argTypeSize = sizeOfType(getArgType(argTypes + i)); //in bytes
+                int argLen = getArgLen(argTypes + i); //arg array length
+                send(newsockfd, args[i], argTypeSize * argLen, 0);
             }
         }
-        else if(executionResult == FAILURE)
+        else if (executionResult == FAILURE)
         {
             //send error code back
             msgtype = EXECUTE_FAILURE;
@@ -578,10 +582,38 @@ int rpcExecute()
             send(newsockfd, &msgtype, sizeof(msgtype), 0);
             send(newsockfd, &reasonCode, sizeof(reasonCode), 0);
         }
-        else    //what happened??
+        else //what happened??
         {
             printf("rpcExecute error\n");
         }
+    }
+}
+
+void* listenForTerminate(void *arg)
+{
+    while(1)
+    {
+        //listen for termination from binder
+        printf("terminating!\n");
+    }
+}
+
+int rpcExecute()
+{
+    printf("rpcExecute\n");
+
+    //getClientRequest
+    if(pthread_create(&threads[0], NULL, getClientRequest, NULL))
+    {
+        printf("ERROR creating thread %d", 0);
+        exit(-1);
+    }
+
+    //listenForTerminate
+    if(pthread_create(&threads[1], NULL, listenForTerminate, NULL))
+    {
+        printf("ERROR creating thread %d", 1);
+        exit(-1);
     }
 
     printf("rpcExecute done\n");
