@@ -97,7 +97,7 @@ int main() {
   argTypes4[1] = 0;
 
   args4 = (void **)malloc(count4 * sizeof(void *));
-  args4[1] = (void *)a4;
+  args4[0] = (void *)a4;
 
   /* rpcCalls */
   int s0 = rpcCall("f0", argTypes0, args0);
