@@ -24,7 +24,7 @@ using namespace std;
 
 //temp defines
 #define ADDRESS "hyesun-ubuntu"
-#define BPORT   19394
+#define BPORT   19322
 #define SPORT   0
 
 //message types
@@ -515,7 +515,7 @@ int rpcExecute()
         //copy the contents of array into temp holder
         for(int j=0; j<arr_size; j++)
         {
-            memcpy(args_holder, argsIndex, arg_type_size);
+            memcpy(args_holder+j*arg_type_size, argsIndex, arg_type_size);
             argsIndex = (void*)((char*)argsIndex + arg_type_size);
         }
     }
