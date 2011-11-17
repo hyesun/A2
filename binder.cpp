@@ -21,23 +21,27 @@ typedef struct
         string fn_name;
         unsigned int* argType;
         int argTypesLen;
+        int server_socket_fd;
 } data_point;
 
 vector<data_point> DataBase;
 
-int serverfd;
+//
 
 //helper functions
 
 int terminate_server()
 {
     printf("terminate_Server()\n");
-
+    int serverfd;
     int msglen=0;
     int msgtype=TERMINATE;
-
-    send(serverfd, &msglen, sizeof(msglen), 0);
-    send(serverfd, &msgtype, sizeof(msgtype), 0);
+    for (int i=0; i < DataBase.size(); i++)
+    {
+      serverfd = DataBase[i].server_socket_fd;
+      send(serverfd, &msglen, sizeof(msglen), 0);
+      send(serverfd, &msgtype, sizeof(msgtype), 0);
+    }
 
     return 0;
 }
@@ -76,8 +80,6 @@ void binder_register(int socketfd, int msglen)
             - sizeof(fn_name); //yes
     unsigned int* argType = (unsigned int*) malloc(argTypesLen);
 
-
-    serverfd = socketfd;
     //receive the message
     int checksum = msglen;
     checksum -= recv(socketfd, server_address, sizeof(server_address), 0);
@@ -106,6 +108,7 @@ void binder_register(int socketfd, int msglen)
         a.fn_name = fn_name;
         a.argType = argType;
         a.argTypesLen = argTypesLen;
+        a.server_socket_fd = socketfd;
         DataBase.push_back(a);
         send(socketfd, &success, sizeof(success), 0);
 
@@ -289,14 +292,23 @@ int main()
                         exit(0);
                     }
 
-                    /*
                     if (status <= 0)
                     {
+                        //get rid of the datapoint if socketfd is in the database of servers
+                        for (int i = 0; i < DataBase.size(); i++)
+                        {
+                            cout << "Removing following fns in Binder Database" << endl;
+                            if (DataBase[i].server_socket_fd == socketfd)
+                            {
+                                cout << DataBase[i].fn_name << endl;
+                                DataBase.erase(DataBase.begin() + i);
+                            }
+                        }
+
                         cout << "terminating:" << socketfd << endl;
                         close(socketfd); // bye!
                         FD_CLR(socketfd, &master); // remove from master set
                     }
-                    */
 
                     //cleanup
                     //free(buffer);
