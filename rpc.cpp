@@ -54,7 +54,10 @@ int port;
 char server_address[MAXHOSTNAME + 1];
 vector<dataentry> database;
 
-// helper functions
+//================================================================
+//  HELPER FUNCTIONS
+//================================================================
+
 int lenOfArgTypes(int* argTypes)
 {
     int argTypesLen = 0;
@@ -74,7 +77,7 @@ int sizeOfType(int argType)
 {
     switch (argType)
     {
-        case 0:
+        case 0: //this is if argType=0
             return 0;
         case ARG_CHAR:
             return sizeof(char);
@@ -228,6 +231,7 @@ int call_socket(char *hostname, int portnum)
     memcpy((char *) &my_addr.sin_addr, host->h_addr, host->h_length);
     my_addr.sin_family =host->h_addrtype;
     my_addr.sin_port = htons((u_short)portnum);
+
     //get socket file descriptor
     sockfd = socket(PF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
@@ -248,7 +252,9 @@ int call_socket(char *hostname, int portnum)
     return sockfd;
 }
 
-// main functions
+//================================================================
+//  MAIN FUNCTIONS
+//================================================================
 
 int rpcInit()
 {
@@ -263,11 +269,8 @@ int rpcInit()
     }
 
     //open a connection to binder, for sending register request. keep this open
-
-    //char* binder_address = getenv("BINDER_ADDRESS");
-    //char* binder_port = getenv("BINDER_PORT");
-    char* binder_address = (char*)ADDRESS;
-    int binder_port=BPORT;
+    char* binder_address = (char*)ADDRESS;  //getenv("BINDER_ADDRESS");
+    int binder_port=BPORT; //getenv("BINDER_PORT");
 
     //connect to the binder
     binderfd=call_socket(binder_address, binder_port);
@@ -283,11 +286,15 @@ int rpcInit()
 
 int rpcCall(char* name, int* argTypes, void** args)
 {
+    printf("rpcCall\n");
+
     //declarations
     char fn_server_address[MAXHOSTNAME + 1];
     int fn_server_port;
 
-    //BINDER PART------------------------------------------
+    //================================================================
+    //SEND BINDER LOC_REQUEST
+    //================================================================
 
     //connect to binder
     binderfd=call_socket((char*)ADDRESS, BPORT);
@@ -299,8 +306,6 @@ int rpcCall(char* name, int* argTypes, void** args)
 
     //get message info ready
     int argTypesLen = lenOfArgTypes(argTypes);
-    cout << "name is " << name << " length is "<< argTypesLen << endl;
-
     int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
     int msgtype = LOC_REQUEST;
     int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
@@ -353,7 +358,9 @@ int rpcCall(char* name, int* argTypes, void** args)
     //done with binder
     close(binderfd);
 
-    //SERVER PART------------------------------------------
+    //================================================================
+    //SEND SERVER EXECUTE
+    //================================================================
 
     //connect to server
     int serverfd=call_socket(fn_server_address, fn_server_port);
@@ -387,16 +394,33 @@ int rpcCall(char* name, int* argTypes, void** args)
 
     char fn_name[MAXFNNAME+s_char];
 
-    //GET REPLY BACK FROM SERVER-----------------------
+    //================================================================
+    //GET SERVER REPLY
+    //================================================================
+
     recv(serverfd, &msglen, sizeof(msglen), 0);
     recv(serverfd, &msgtype, sizeof(msgtype), 0);
-    recv(serverfd, fn_name, sizeof(fn_name), 0);
-    recv(serverfd, argTypes, argTypesLen*s_int, 0);
-    for(int i=0; i<argTypesLen-1; i++)  //for each argument
+
+    if (msgtype == EXECUTE_SUCCESS)
     {
-        int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
-        int argLen = getArgLen(argTypes+i);              //arg array length
-        recv(serverfd, args[i], argTypeSize*argLen, 0);
+        recv(serverfd, fn_name, sizeof(fn_name), 0);
+        recv(serverfd, argTypes, argTypesLen*s_int, 0);
+        for(int i=0; i<argTypesLen-1; i++)  //for each argument
+        {
+            int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
+            int argLen = getArgLen(argTypes+i);              //arg array length
+            recv(serverfd, args[i], argTypeSize*argLen, 0);
+        }
+    }
+    else if(msgtype == EXECUTE_FAILURE)
+    {
+        int reasonCode;
+        recv(serverfd, &reasonCode, sizeof(reasonCode), 0);
+        return reasonCode;
+    }
+    else //what happened??
+    {
+        printf("rpcCall error\n");
     }
 
     printf("rpcCall done\n");
@@ -407,10 +431,12 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 {
     printf("rpcRegister\n");
 
-    //count argTypes length
+    //================================================================
+    //GET MESSAGE READY
+    //================================================================
 
+    //count argTypes length
     int argTypesLen = lenOfArgTypes(argTypes);
-    cout << "name is " << name << " length is "<< argTypesLen << endl;
 
     //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
     int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+s_char + argTypesLen*s_int;
@@ -420,6 +446,10 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
 
     //for checking send success
     int checksum = msglen + sizeof(msglen) + sizeof(msgtype);
+
+    //================================================================
+    //SEND TO BINDER
+    //================================================================
 
     //first two bytes are always length and type
     checksum-=send(binderfd, &msglen, sizeof(msglen), 0);
@@ -438,6 +468,10 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
         return FAILURE;
     }
 
+    //================================================================
+    //GET BINDER REPLY
+    //================================================================
+
     //get binder reply
     int reply=FAILURE;
     checksum=recv(binderfd, &reply, sizeof(reply), 0);
@@ -452,19 +486,14 @@ int rpcRegister(char* name, int* argTypes, skeleton f)
         return FAILURE;
     }
 
-    //record this function in local database
+    //================================================================
+    //RECORD THE FUNCTION IN DATABASE
+    //================================================================
+
     dataentry record;
     strncpy(record.fn_name, name, 3);
     record.fn_skel=f;
     database.push_back(record);
-
-    //read back the record
-    for(int i=0; i<database.size(); i++)
-    {
-        int (*pf)(int*, void**);
-        pf = database[i].fn_skel;
-        printf("database entry [%i]: %s, %p\n", i, database[i].fn_name, pf);
-    }
 
     printf("rpcRegister done\n");
     return SUCCESS;
@@ -479,6 +508,10 @@ int rpcExecute()
         //declare
         int checksum, msglen, msgtype;
         char fn_name[MAXFNNAME+s_char];
+
+        //================================================================
+        //RECV FROM CLIENT
+        //================================================================
 
         //wait for client to call my socket
         int newsockfd = get_connection(clientfd);
@@ -495,13 +528,9 @@ int rpcExecute()
         recv(newsockfd, fn_name, sizeof(fn_name), 0);
         recv(newsockfd, argsCumulative, argsCumulativeSize, MSG_WAITALL);
 
-        //check that i've received correctly
-        for(int i=0; i<4; i++)
-        {
-            cout << argsCumulative[i] << endl;
-        }
-
-        //unpack argsCumulative---------------------------------------------
+        //================================================================
+        //UNPACK ARGSCUMULATIVE
+        //================================================================
 
         //first, see how many args there are
         int argTypesLen = lenOfArgTypes(argsCumulative);
@@ -537,36 +566,52 @@ int rpcExecute()
             }
         }
 
-        int executionResult = FAILURE;
+        //================================================================
+        //SEND TO SKELETON FUNCTION
+        //================================================================
 
-        //send it to skel
+        int executionResult = FAILURE;
         for(int i=0; i<database.size(); i++)
         {
             string a = database[i].fn_name;
             string b = fn_name;
-            if (a == b)
+            if (a == b) //look for the function name
             {
-                printf("match found in database\n");
                 executionResult = database[i].fn_skel(argTypes, args);
             }
         }
 
-        //send the result back
-        send(newsockfd, &msglen, sizeof(msglen), 0);
-        send(newsockfd, &msgtype, sizeof(msgtype), 0);
-        send(newsockfd, fn_name, sizeof(fn_name), 0);
-        send(newsockfd, argTypes, argTypesLen*s_int, 0);
-        for(int i=0; i<argTypesLen-1; i++)  //for each argument
-        {
-            int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
-            int argLen = getArgLen(argTypes+i);              //arg array length
-            send(newsockfd, args[i], argTypeSize*argLen, 0);
-        }
+        //================================================================
+        //SEND THE RESULTS BACK TO CLIENT
+        //================================================================
 
-        //get the computation result, which is the first arg
-        char *result = (char *)malloc(100 * sizeof(char));
-        result = (char *)(args[0]);
-        printf("result is %s\n", result);
+        if(executionResult == SUCCESS)
+        {
+            msgtype = EXECUTE_SUCCESS;
+            send(newsockfd, &msglen, sizeof(msglen), 0);
+            send(newsockfd, &msgtype, sizeof(msgtype), 0);
+            send(newsockfd, fn_name, sizeof(fn_name), 0);
+            send(newsockfd, argTypes, argTypesLen*s_int, 0);
+            for(int i=0; i<argTypesLen-1; i++)  //for each argument
+            {
+                int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
+                int argLen = getArgLen(argTypes+i);              //arg array length
+                send(newsockfd, args[i], argTypeSize*argLen, 0);
+            }
+        }
+        else if(executionResult == FAILURE)
+        {
+            //send error code back
+            msgtype = EXECUTE_FAILURE;
+            int reasonCode = executionResult;
+            send(newsockfd, &msglen, sizeof(msglen), 0);
+            send(newsockfd, &msgtype, sizeof(msgtype), 0);
+            send(newsockfd, &reasonCode, sizeof(reasonCode), 0);
+        }
+        else    //what happened??
+        {
+            printf("rpcExecute error\n");
+        }
     }
 
     printf("rpcExecute done\n");
