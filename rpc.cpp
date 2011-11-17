@@ -385,6 +385,39 @@ int rpcCall(char* name, int* argTypes, void** args)
         send(serverfd, (void*)args[i], argTypeSize*argLen, 0);
     }
 
+    char fn_name[MAXFNNAME+s_char];
+
+    //GET REPLY BACK FROM SERVER-----------------------
+    recv(serverfd, &msglen, sizeof(msglen), 0);
+    recv(serverfd, &msgtype, sizeof(msgtype), 0);
+    recv(serverfd, fn_name, sizeof(fn_name), 0);
+    recv(serverfd, argTypes, argTypesLen*s_int, 0);
+
+    recv(serverfd, (char*)args[0], 100, 0);
+
+    /*
+    //get args back
+    for(int i=0; i<argTypesLen-1; i++)  //for each argument
+    {
+        int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
+        int argLen = getArgLen(argTypes+i);              //arg array length
+        send(serverfd, (void*)args[i], argTypeSize*argLen, 0);
+    }
+    */
+
+    cout << msglen << endl;
+    cout << msgtype << endl;
+    cout << fn_name << endl;
+    for(int i=0; i<4; i++)
+    {
+        cout << argTypes[i] << endl;
+    }
+
+    //get the computation result, which is the first arg
+    char *result = (char *)malloc(100 * sizeof(char));
+    result = (char *)(args[0]);
+    printf("result is %s\n", result);
+
     printf("rpcCall done\n");
     return SUCCESS;
 }
@@ -521,6 +554,8 @@ int rpcExecute()
         }
     }
 
+    int executionResult = FAILURE;
+
     //send it to skel
     for(int i=0; i<database.size(); i++)
     {
@@ -529,18 +564,31 @@ int rpcExecute()
         if (a == b)
         {
             printf("match found in database\n");
-            database[i].fn_skel(argTypes, args);
+            executionResult = database[i].fn_skel(argTypes, args);
         }
     }
 
     //get the computation result, which is the first arg
-    //int result = *((int*)args[0]);
     char *result = (char *)malloc(100 * sizeof(char));
     result = (char *)(args[0]);
     printf("result is %s\n", result);
 
     //send the result back
+    send(newsockfd, &msglen, sizeof(msglen), 0);
+    send(newsockfd, &msgtype, sizeof(msgtype), 0);
+    send(newsockfd, fn_name, sizeof(fn_name), 0);
+    send(newsockfd, argTypes, argTypesLen*s_int, 0);
 
+    send(newsockfd, (char*)args[0], 100, 0);
+    /*
+    //send the main message - args
+    for(int i=0; i<argTypesLen-1; i++)  //for each argument
+    {
+        int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
+        int argLen = getArgLen(argTypes+i);              //arg array length
+        send(newsockfd, (void*)args[i], argTypeSize*argLen, 0);
+    }
+    */
 
     printf("done\n");
     return SUCCESS;
