@@ -55,7 +55,6 @@ typedef struct
 
 //global variables
 int die = 0;
-int binder;
 int binderfd, clientfd;
 int port;
 char server_address[MAXHOSTNAME + 1];
@@ -608,6 +607,7 @@ void* listenForTerminate(void *arg)
     {
         //listen for termination from binder
         int msglen, msgtype;
+
         recv(binderfd, &msglen, sizeof(msglen), 0);
         recv(binderfd, &msgtype, sizeof(msgtype), 0);
 
