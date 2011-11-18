@@ -14,24 +14,13 @@ using namespace std;
 #include <pthread.h>
 #include "rpc.h"
 
-//perm defines
 #define BACKLOG 5       //max # of queued connects
 #define MAXHOSTNAME 30  //"hyesun-ubuntu"
 #define MAXFNNAME 50    //"f0"
-#define s_char 1        //size of char in bytes
-#define s_int 4         //size of int in bytes
 #define SUCCESS  0
 #define FAILURE -1
-#define NUMTHREADS 3
-
-//temp defines
-//#define ADDRESS "hyesun-ubuntu"
 #define BPORT   0
 #define SPORT   0
-
-//create threads on stack
-pthread_t threads[NUMTHREADS];
-pthread_mutex_t mutexsum;
 
 //message types
 enum message_type
@@ -316,7 +305,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
 
     //get message info ready
     int argTypesLen = lenOfArgTypes(argTypes);
-    int msglen = MAXFNNAME+s_char + argTypesLen*s_int;
+    int msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
     int msgtype = LOC_REQUEST;
 
     //first send msglen and msgtype
@@ -324,8 +313,8 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     send(binderfd, &msgtype, sizeof(msgtype), 0);
 
     //send the main message
-    send(binderfd, name, MAXFNNAME+s_char, 0);
-    send(binderfd, argTypes, argTypesLen*s_int, 0);
+    send(binderfd, name, MAXFNNAME+sizeof(char), 0);
+    send(binderfd, argTypes, argTypesLen*sizeof(int), 0);
 
     //get binder's reply
     recv(binderfd, &msglen, sizeof(msglen), 0);
@@ -366,7 +355,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
 
     //get message info ready
     int argLenByte = sizeOfArgs(argTypes);    //count how long args is
-    msglen = MAXFNNAME+s_char + argTypesLen*s_int + argLenByte;
+    msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int) + argLenByte;
     msgtype = EXECUTE;
 
     //first send msglen and msgtype
@@ -374,8 +363,8 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     send(serverfd, &msgtype, sizeof(msgtype), 0);
 
     //send the main message
-    send(serverfd, name, MAXFNNAME+s_char, 0);
-    send(serverfd, argTypes, argTypesLen*s_int, 0);
+    send(serverfd, name, MAXFNNAME+sizeof(char), 0);
+    send(serverfd, argTypes, argTypesLen*sizeof(int), 0);
 
     //send the main message - args
     for(int i=0; i<argTypesLen-1; i++)  //for each argument
@@ -385,7 +374,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
         send(serverfd, (void*)args[i], argTypeSize*argLen, 0);
     }
 
-    char fn_name[MAXFNNAME+s_char];
+    char fn_name[MAXFNNAME+1];
 
     //================================================================
     //GET SERVER REPLY
@@ -397,7 +386,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     if (msgtype == EXECUTE_SUCCESS)
     {
         recv(serverfd, fn_name, sizeof(fn_name), 0);
-        recv(serverfd, argTypes, argTypesLen*s_int, 0);
+        recv(serverfd, argTypes, argTypesLen*sizeof(int), 0);
         for(int i=0; i<argTypesLen-1; i++)  //for each argument
         {
             int argTypeSize = sizeOfType(getArgType(argTypes+i));    //in bytes
@@ -436,7 +425,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
     int argTypesLen = lenOfArgTypes(argTypes);
 
     //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
-    int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+s_char + argTypesLen*s_int;
+    int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
 
     //type of message is REGISTER
     int msgtype = REGISTER;
@@ -452,8 +441,8 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
     //send the four components of the message (DON'T do sizeof() for name and argTypes)
     send(binderfd, server_address, sizeof(server_address), 0);
     send(binderfd, &port, sizeof(port), 0);
-    send(binderfd, name, MAXFNNAME+s_char, 0);
-    send(binderfd, argTypes, argTypesLen*s_int, 0);
+    send(binderfd, name, MAXFNNAME+sizeof(char), 0);
+    send(binderfd, argTypes, argTypesLen*sizeof(int), 0);
 
     //================================================================
     //GET BINDER REPLY
@@ -488,7 +477,7 @@ void* getClientRequest(void* arg)
     {
         //declare
         int msglen, msgtype;
-        char fn_name[MAXFNNAME + s_char];
+        char fn_name[MAXFNNAME+1];
 
         //================================================================
         //RECV FROM CLIENT
@@ -517,11 +506,11 @@ void* getClientRequest(void* arg)
         int argTypesLen = lenOfArgTypes(argsCumulative);
 
         //figure out argTypes
-        int *argTypes = (int*) malloc(argTypesLen * s_int);
-        memcpy(argTypes, argsCumulative, argTypesLen * s_int);
+        int *argTypes = (int*) malloc(argTypesLen * sizeof(int));
+        memcpy(argTypes, argsCumulative, argTypesLen * sizeof(int));
 
         //figure out args
-        int argsSize = argsCumulativeSize - argTypesLen * s_int; //in bytes
+        int argsSize = argsCumulativeSize - argTypesLen * sizeof(int); //in bytes
         void** args = (void**) malloc((argTypesLen - 1) * sizeof(void*));
         void* argsIndex = argsCumulative + argTypesLen; //point to the correct place
 
@@ -572,7 +561,7 @@ void* getClientRequest(void* arg)
             send(newsockfd, &msglen, sizeof(msglen), 0);
             send(newsockfd, &msgtype, sizeof(msgtype), 0);
             send(newsockfd, fn_name, sizeof(fn_name), 0);
-            send(newsockfd, argTypes, argTypesLen * s_int, 0);
+            send(newsockfd, argTypes, argTypesLen * sizeof(int), 0);
             for (int i = 0; i < argTypesLen - 1; i++) //for each argument
             {
                 int argTypeSize = sizeOfType(getArgType(argTypes + i)); //in bytes
@@ -624,6 +613,10 @@ void* listenForTerminate(void *arg)
 int rpcExecute()
 {
     printf("rpcExecute\n");
+
+    //create threads on stack
+    pthread_t threads[2];
+    pthread_mutex_t mutexsum;
 
     //listenForTerminate
     if(pthread_create(&threads[0], NULL, listenForTerminate, NULL))

@@ -161,7 +161,7 @@ void binder_service_client(int socketfd, int msglen)
             const char* server_address =
                     DataBase[index_found].server_address.c_str();
             int port = DataBase[index_found].port;
-            int sendmsglen = MAXHOSTNAME + s_char + sizeof(port);
+            int sendmsglen = MAXHOSTNAME+sizeof(char) + sizeof(port);
             int sendmsgtype = LOC_SUCCESS;
             int sendchecksum = sendmsglen + sizeof(sendmsgtype)
                     + sizeof(sendmsglen);
@@ -195,7 +195,7 @@ void binder_service_client(int socketfd, int msglen)
         else
         {
             cout << "SERVER FUNCTION NOT FOUND" << endl;
-            int msglen = MAXFNNAME + s_char + argTypesLen * s_int;
+            int msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
             int msgtype = LOC_FAILURE;
             int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
         }

@@ -1,0 +1,5 @@
+ssh han@ubuntu-910.student.cs.uwaterloo.ca
+scp * han@ubuntu-910.student.cs.uwaterloo.ca:~/cs454/A2
+
+export BINDER_PORT=53941
+setenv BINDER_PORT 53941
