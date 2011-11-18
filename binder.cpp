@@ -26,6 +26,7 @@ typedef struct
 
 vector<data_point> DataBase;
 
+vector<int> SocketDataBase;
 //
 
 //helper functions
@@ -36,9 +37,9 @@ int terminate_server()
     int serverfd;
     int msglen=0;
     int msgtype=TERMINATE;
-    for (int i=0; i < DataBase.size(); i++)
+    for (int i=0; i < SocketDataBase.size(); i++)
     {
-      serverfd = DataBase[i].server_socket_fd;
+      serverfd = SocketDataBase[i];
       send(serverfd, &msglen, sizeof(msglen), 0);
       send(serverfd, &msgtype, sizeof(msgtype), 0);
     }
@@ -115,6 +116,7 @@ void binder_register(int socketfd, int msglen)
         cout << "address: " << DataBase.back().server_address << endl;
         cout << "port: " << DataBase.back().port << endl;
         cout << "fn name: " << DataBase.back().fn_name << endl;
+        cout << "serverfd: " << DataBase.back().server_socket_fd << endl;
         for (int j = 0; j < DataBase.back().argTypesLen / sizeof(int); j++)
         {
             cout << "argTypeLen: " << DataBase.back().argTypesLen << endl;
@@ -277,6 +279,7 @@ int main()
                     if (msgtype == REGISTER && status > 0)
                     {
                         binder_register(socketfd, msglen);
+                        SocketDataBase.push_back(socketfd);
                     }
                     else if (msgtype == LOC_REQUEST)
                     {
@@ -297,17 +300,18 @@ int main()
                         //get rid of the datapoint if socketfd is in the database of servers
                         for (int i = 0; i < DataBase.size(); i++)
                         {
-                            cout << "Removing following fns in Binder Database" << endl;
                             if (DataBase[i].server_socket_fd == socketfd)
                             {
+                                cout << "Removing following fns in Binder Database" << endl;
                                 cout << DataBase[i].fn_name << endl;
+                                cout << DataBase[i].server_socket_fd << endl;
                                 DataBase.erase(DataBase.begin() + i);
+                                i--;
                             }
                         }
-
                         cout << "terminating:" << socketfd << endl;
                         close(socketfd); // bye!
-                        FD_CLR(socketfd, &master); // remove from master set
+                        FD_CLR(socketfd, &master); // remove from master seta
                     }
 
                     //cleanup
