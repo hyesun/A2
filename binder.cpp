@@ -50,25 +50,26 @@ int terminate_server()
 int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
 {
     int index_found = -1;
-    int fn_name_found = FAILURE;
-    int arg_types_match = SUCCESS;
+    int arg_types_match;
     for (int i = 0; i < DataBase.size(); i++)
     {
+        arg_types_match = SUCCESS;
         if (fn_name == DataBase[i].fn_name)
         {
             index_found = i;
-            fn_name_found = SUCCESS;
-            for (int j = 0; j < argTypesLen / sizeof(int); j++)
+            if (argTypesLen == DataBase[index_found].argTypesLen)
             {
-                if (argType[j] != DataBase[index_found].argType[j])
-                    arg_types_match = FAILURE;
+                for (int j = 0; (j < argTypesLen / sizeof(int)) && (arg_types_match == SUCCESS); j++)
+                {
+                    if (argType[j] != DataBase[index_found].argType[j])
+                        arg_types_match = FAILURE;
+                }
+                if (arg_types_match == SUCCESS)
+                    return index_found;
             }
         }
     }
-    if (fn_name_found == SUCCESS && arg_types_match == SUCCESS)
-        return index_found;
-    else
-        return FAILURE;
+    return FAILURE;
 }
 
 void binder_register(int socketfd, int msglen)
@@ -111,7 +112,6 @@ void binder_register(int socketfd, int msglen)
         a.argTypesLen = argTypesLen;
         a.server_socket_fd = socketfd;
         DataBase.push_back(a);
-        send(socketfd, &success, sizeof(success), 0);
 
         cout << "address: " << DataBase.back().server_address << endl;
         cout << "port: " << DataBase.back().port << endl;
@@ -124,6 +124,7 @@ void binder_register(int socketfd, int msglen)
                     << endl;
         }
     }
+    send(socketfd, &success, sizeof(success), 0);
 }
 
 void binder_service_client(int socketfd, int msglen)
@@ -266,8 +267,6 @@ int main()
                 {
                     int status;
                     int success;
-                    cout << endl << endl << "-------accept fn reg calls-----"
-                            << endl << endl;
                     //get first 8 bytes
                     int msglen;
                     int msgtype;
@@ -278,11 +277,19 @@ int main()
                     //check msgtype to see if from server
                     if (msgtype == REGISTER && status > 0)
                     {
+                        cout << endl << endl << "-------accept fn reg calls-----"
+                                << endl << endl;
                         binder_register(socketfd, msglen);
+                        for (int j = 0; j < DataBase.size(); j++)
+                        {
+                            cout << "Port: " << DataBase[j].port << endl;
+                        }
                         SocketDataBase.push_back(socketfd);
                     }
                     else if (msgtype == LOC_REQUEST)
                     {
+                      cout << endl << endl << "-------accept fn loc calls-----"
+                              << endl << endl;
                         binder_service_client(socketfd, msglen);
                     }
                     else if (msgtype == TERMINATE)
