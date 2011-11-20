@@ -1,11 +1,21 @@
-CS454 Assignment 2 Milestone
+CS454 Assignment 2
 By:Hyesun An (han;20279345), Sejoon Kwak (s2kwak;20270949)
 
-Files included:
+Files included for submission:
 - README
 - Makefile
-- etc
+- rpc.cpp
+- binder.cpp
 
 How to build:
+1. make (this builds the library and binder exe)
+2. g++ -g -o0 -Wall -Wl,--no-as-needed -pthread client.o librpc.a -o client
+3. g++ -g -o0 -Wall -Wl,--no-as-needed -pthread server.o server_functions.o server_function_skels.o librpc.a -o server
+
+How to run:
+./binder
+set BINDER_ADDRESS and BINDER_PORT on client and server machines using setenv or export
+./server
+./client
 
 Thank you
