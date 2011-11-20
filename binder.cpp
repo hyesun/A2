@@ -27,6 +27,8 @@ typedef struct
 vector<data_point> DataBase;
 
 vector<int> SocketDataBase;
+
+int terminate_flag = 0;
 //
 
 //helper functions
@@ -182,6 +184,7 @@ void binder_service_client(int socketfd, int msglen)
             temp.fn_name = DataBase[index_found].fn_name;
             temp.server_address = DataBase[index_found].server_address;
             temp.port = DataBase[index_found].port;
+            temp.server_socket_fd = DataBase[index_found].server_socket_fd;
             temp.argType = DataBase[index_found].argType;
             temp.argTypesLen = DataBase[index_found].argTypesLen;
             DataBase.erase(DataBase.begin() + index_found);
@@ -270,6 +273,7 @@ int main()
                     //get first 8 bytes
                     int msglen;
                     int msgtype;
+                    int socket_add_flag = 1;
                     status = recv(socketfd, &msglen, sizeof(msglen), 0);
                     if (status > 0)
                         status = recv(socketfd, &msgtype, sizeof(msgtype), 0);
@@ -280,22 +284,26 @@ int main()
                         cout << endl << endl << "-------accept fn reg calls-----"
                                 << endl << endl;
                         binder_register(socketfd, msglen);
-                        SocketDataBase.push_back(socketfd);
+                        for (int i=0; i< SocketDataBase.size(); i++)
+                        {
+                            if (SocketDataBase[i] == socketfd)
+                              socket_add_flag = 0;
+                        }
+                        if (socket_add_flag == 1)
+                          SocketDataBase.push_back(socketfd);
                     }
-                    else if (msgtype == LOC_REQUEST)
+                    else if (msgtype == LOC_REQUEST && status > 0)
                     {
-                      cout << endl << endl << "-------accept fn loc calls-----"
+                        cout << endl << endl << "-------accept fn loc calls-----"
                               << endl << endl;
                         binder_service_client(socketfd, msglen);
                     }
-                    else if (msgtype == TERMINATE)
+                    else if (msgtype == TERMINATE && status > 0)
                     {
                         printf("got terminate message\n");
-
+                        terminate_flag = 1;
                         terminate_server();
                         printf("sent terminate message to server complete\n");
-
-                        exit(0);
                     }
 
                     if (status <= 0)
@@ -303,6 +311,7 @@ int main()
                         //get rid of the datapoint if socketfd is in the database of servers
                         for (int i = 0; i < DataBase.size(); i++)
                         {
+                          cout << "this is what's still in the database: " << DataBase[i].server_socket_fd << " fn name: " << DataBase[i].fn_name << endl;
                             if (DataBase[i].server_socket_fd == socketfd)
                             {
                                 cout << "Removing following fns in Binder Database" << endl;
@@ -312,9 +321,24 @@ int main()
                                 i--;
                             }
                         }
+                        //get rid of socketfd in socket database
+                        for (int i =0; i < SocketDataBase.size(); i++)
+                        {
+                          if (SocketDataBase[i] == socketfd)
+                          {
+                              cout << "socketDatabase size: " << SocketDataBase.size() << endl;
+                              cout << "Removing following sockets in Binder socketDatabase:" << endl;
+                              cout << SocketDataBase[i] << endl;
+                              SocketDataBase.erase(SocketDataBase.begin() + i);
+                              i--;
+                          }
+                        }
                         cout << "terminating:" << socketfd << endl;
                         close(socketfd); // bye!
                         FD_CLR(socketfd, &master); // remove from master seta
+                        cout << "SocketDataBase.size() : " << SocketDataBase.size() << endl;
+                        if(terminate_flag == 1 && SocketDataBase.size() == 0)
+                          exit(0);
                     }
 
                     //cleanup
