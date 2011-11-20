@@ -607,6 +607,15 @@ void* serveClientRequest(void* newsockfdptr)
     //bye client
     close(newsockfd);
 
+    //clean up
+    for(int i=0; i<argTypesLen-1; i++)
+    {
+        free(*(args+i));
+    }
+    free(args);
+    free(argTypes);
+    free(argsCumulative);
+
     //the thread has finished its service to the client. it should die now.
     threadDec();
     pthread_exit(NULL);
