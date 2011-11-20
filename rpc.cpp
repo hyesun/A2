@@ -14,13 +14,14 @@ using namespace std;
 #include <pthread.h>
 #include "rpc.h"
 
-#define BACKLOG 5       //max # of queued connects
+#define BACKLOG 50       //max # of queued connects
 #define MAXHOSTNAME 30  //"hyesun-ubuntu"
 #define MAXFNNAME 50    //"f0"
 #define SUCCESS  0
 #define FAILURE -1
 #define BPORT   0
 #define SPORT   0
+#define NUMTHREADS 5
 
 //message types
 enum message_type
@@ -44,10 +45,11 @@ typedef struct
 
 //global variables
 int die = 0;
-int binderfd, clientfd;
-int port;
-char server_address[MAXHOSTNAME + 1];
-vector<dataentry> database;
+int binderfd;
+int clientfd;
+int server_port;
+char server_address[MAXHOSTNAME+1];
+vector<dataentry> database; //server's database of its functions
 
 //================================================================
 //  HELPER FUNCTIONS
@@ -72,8 +74,6 @@ int sizeOfType(int argType)
 {
     switch (argType)
     {
-        case 0: //this is if argType=0
-            return 0;
         case ARG_CHAR:
             return sizeof(char);
         case ARG_SHORT:
@@ -118,7 +118,7 @@ int sizeOfArgs(int* argTypes)
     argTypesLen = lenOfArgTypes(argTypes);
 
     //get size of each element type
-    for(int i=0; i<argTypesLen; i++)
+    for(int i=0; i<argTypesLen-1; i++)
     {
         //get size of the type
         typeSize = sizeOfType(getArgType(argTypes+i));
@@ -135,13 +135,14 @@ int sizeOfArgs(int* argTypes)
 
 int establish(unsigned short portnum, int binder)
 {
-    int sockfd, result;
+    int port, sockfd, result;
     struct hostent *host;
     struct sockaddr_in my_addr;
+    char address[MAXHOSTNAME+1];
 
     //get host info
-    gethostname(server_address, MAXHOSTNAME);
-    host = gethostbyname(server_address);
+    gethostname(address, MAXHOSTNAME);
+    host = gethostbyname(address);
     if (host == NULL)
     {
         printf("gethost error\n");
@@ -176,12 +177,16 @@ int establish(unsigned short portnum, int binder)
     getsockname(sockfd, (struct sockaddr*)&my_addr, (socklen_t*)&length);
     port = ntohs(my_addr.sin_port);
 
-    //print out the required env var
-    if (binder)
+    if (binder) //binder only - print out the required env var
     {
-      printf("BINDER_ADDRESS %s\n", server_address);
+      printf("BINDER_ADDRESS %s\n", address);
       printf("BINDER_PORT %i\n", port);
 
+    }
+    else    //servers only - save these for use in rpcRegister
+    {
+        strcpy(server_address, address);
+        server_port = port;
     }
 
     //listen for connections
@@ -283,11 +288,11 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
 {
     printf("rpcCall\n");
 
-    //declarations
-    char fn_server_address[MAXHOSTNAME + 1];
-    int fn_server_port;
+    //server info
+    char server_address[MAXHOSTNAME+1];
+    int server_port;
 
-    //get binder info
+    //binder info
     char* binder_address = getenv("BINDER_ADDRESS");
     int binder_port= atoi(getenv("BINDER_PORT"));
 
@@ -322,8 +327,8 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
 
     if (msgtype == LOC_SUCCESS)
     {
-        recv(binderfd, fn_server_address, sizeof(fn_server_address), 0);
-        recv(binderfd, &fn_server_port, sizeof(fn_server_port), 0);
+        recv(binderfd, server_address, sizeof(server_address), 0);
+        recv(binderfd, &server_port, sizeof(server_port), 0);
     }
     else if(msgtype == LOC_FAILURE)
     {
@@ -346,7 +351,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     //================================================================
 
     //connect to server
-    int serverfd=call_socket(fn_server_address, fn_server_port);
+    int serverfd=call_socket(server_address, server_port);
     if (serverfd < 0)
     {
         printf("call socket error: %i\n", serverfd);
@@ -425,7 +430,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
     int argTypesLen = lenOfArgTypes(argTypes);
 
     //calculate message length in bytes (DON'T do sizeof() for name and argTypes)
-    int msglen = sizeof(server_address) + sizeof(port) + MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
+    int msglen = sizeof(server_address) + sizeof(server_port) + MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
 
     //type of message is REGISTER
     int msgtype = REGISTER;
@@ -440,7 +445,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
 
     //send the four components of the message (DON'T do sizeof() for name and argTypes)
     send(binderfd, server_address, sizeof(server_address), 0);
-    send(binderfd, &port, sizeof(port), 0);
+    send(binderfd, &server_port, sizeof(server_port), 0);
     send(binderfd, name, MAXFNNAME+sizeof(char), 0);
     send(binderfd, argTypes, argTypesLen*sizeof(int), 0);
 
@@ -463,7 +468,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
     //================================================================
 
     dataentry record;
-    strncpy(record.fn_name, name, 3);
+    strncpy(record.fn_name, name, MAXFNNAME+1);
     record.fn_skel=f;
     database.push_back(record);
 
@@ -582,9 +587,9 @@ void* getClientRequest(void* arg)
         {
             printf("rpcExecute error\n");
         }
-        if(die==1)
+        if(die == 1)
         {
-            printf("terminating clientrequest thread\n");
+            printf("terminating client request thread\n");
             exit(0);
         }
     }
@@ -602,12 +607,13 @@ void* listenForTerminate(void *arg)
 
         if (msgtype == TERMINATE)
         {
-            printf("terminate recieved\n");
-            die = 1;
+            printf("terminate received\n");
+            die = 1;    //set this flag on
             exit(0);
         }
-
+        printf("listening\n");
     }
+
 }
 
 int rpcExecute()
@@ -615,25 +621,27 @@ int rpcExecute()
     printf("rpcExecute\n");
 
     //create threads on stack
-    pthread_t threads[2];
+    pthread_t thread[NUMTHREADS];
     pthread_mutex_t mutexsum;
+    pthread_attr_t attr;
+
+    //initialize and set thread detached attribute
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
     //listenForTerminate
-    if(pthread_create(&threads[0], NULL, listenForTerminate, NULL))
+    if(pthread_create(&thread[0], &attr, listenForTerminate, NULL))
     {
         printf("ERROR creating thread %d", 1);
         exit(-1);
     }
 
     //getClientRequest
-    if(pthread_create(&threads[1], NULL, getClientRequest, NULL))
+    if(pthread_create(&thread[1], &attr, getClientRequest, NULL))
     {
         printf("ERROR creating thread %d", 0);
         exit(-1);
     }
-
-    pthread_join(threads[0], NULL);
-    pthread_join(threads[1], NULL);
 
     printf("rpcExecute done\n");
     return SUCCESS;
@@ -662,6 +670,9 @@ int rpcTerminate()
     //send it to binder
     send(binderfd, &msglen, sizeof(msglen), MSG_WAITALL);
     send(binderfd, &msgtype, sizeof(msgtype), MSG_WAITALL);
+
+    //bye binder
+    close(binderfd);
 
     printf("rpcTerminate done\n");
     return SUCCESS;
