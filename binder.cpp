@@ -59,6 +59,7 @@ int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
 {
     int index_found = -1;
     int arg_types_match;
+    int intoutbits = 0;
     for (int i = 0; i < DataBase.size(); i++)
     {
         arg_types_match = SUCCESS;
@@ -69,7 +70,13 @@ int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
             {
                 for (int j = 0; (j < argTypesLen / sizeof(int)) && (arg_types_match == SUCCESS); j++)
                 {
-                    if (argType[j] != DataBase[index_found].argType[j])
+                    //compare output/input
+
+                    if(argType[j] >> 30 != DataBase[index_found].argType[j] >> 30)
+                        arg_types_match = FAILURE;
+                    if (getArgType((int*)(argType+j)) != getArgType((int*)(DataBase[index_found].argType+j)))
+                        arg_types_match = FAILURE;
+                    if (getArgType((int*)(argType+j)) > getArgType((int*)(DataBase[index_found].argType+j)))
                         arg_types_match = FAILURE;
                 }
                 if (arg_types_match == SUCCESS)
@@ -214,7 +221,6 @@ void binder_service_client(int socketfd, int msglen)
             send(socketfd, &reasonCode, sizeof(reasonCode), 0);
         }
     }
-
 }
 
 //main function
