@@ -207,7 +207,11 @@ void binder_service_client(int socketfd, int msglen)
             cout << "SERVER FUNCTION NOT FOUND" << endl;
             int msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
             int msgtype = LOC_FAILURE;
+            int reasonCode = FAILURE;
             int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
+            send(socketfd, &msglen, sizeof(msglen), 0);
+            send(socketfd, &msgtype, sizeof(msgtype), 0);
+            send(socketfd, &reasonCode, sizeof(reasonCode), 0);
         }
     }
 

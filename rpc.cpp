@@ -33,7 +33,8 @@ enum message_type
     EXECUTE,
     EXECUTE_SUCCESS,
     EXECUTE_FAILURE,
-    TERMINATE
+    TERMINATE,
+    TERMINATE_SUCCESS
 };
 
 //local database for server
@@ -646,8 +647,11 @@ void* listenForTerminate(void *arg)
 
             //set this flag on to let main thread know we're getting ready to die
             die = 1;
+            msgtype = TERMINATE_SUCCESS;
 
             //set a terminate response here?
+            send(binderfd, &msglen, sizeof(msglen), 0);
+            send(binderfd, &msgtype, sizeof(msgtype), 0);
 
             //bye binder
             close(binderfd);
