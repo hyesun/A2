@@ -35,7 +35,6 @@ int terminate_flag = 0;
 
 int terminate_server()
 {
-    printf("terminate_Server()\n");
     int serverfd;
     int msglen=0;
     int msgtype=TERMINATE;
@@ -71,7 +70,6 @@ int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
                 for (int j = 0; (j < argTypesLen / sizeof(int)) && (arg_types_match == SUCCESS); j++)
                 {
                     //compare output/input
-
                     if(argType[j] >> 30 != DataBase[index_found].argType[j] >> 30)
                         arg_types_match = FAILURE;
                     if (getArgType((int*)(argType+j)) != getArgType((int*)(DataBase[index_found].argType+j)))
@@ -84,12 +82,12 @@ int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
             }
         }
     }
-    return FAILURE;
+    return SERVER_FN_NOT_FOUND;
 }
 
-void binder_register(int socketfd, int msglen)
+int binder_register(int socketfd, int msglen)
 {
-    int success = SUCCESS;
+    int result;
     char server_address[MAXHOSTNAME + 1];
     int port;
     char fn_name[MAXFNNAME + 1];
@@ -98,27 +96,30 @@ void binder_register(int socketfd, int msglen)
     unsigned int* argType = (unsigned int*) malloc(argTypesLen);
 
     //receive the message
-    int checksum = msglen;
-    checksum -= recv(socketfd, server_address, sizeof(server_address), 0);
-    checksum -= recv(socketfd, &port, sizeof(port), 0);
-    checksum -= recv(socketfd, fn_name, sizeof(fn_name), 0);
-    checksum -= recv(socketfd, argType, argTypesLen, 0);
-
-    if (checksum != 0)
-        success = FAILURE;
+    recv(socketfd, server_address, sizeof(server_address), 0);
+    recv(socketfd, &port, sizeof(port), 0);
+    recv(socketfd, fn_name, sizeof(fn_name), 0);
+    recv(socketfd, argType, argTypesLen, 0);
     //check if same function from same server already exists
     //and over write if true
     int index = database_lookup(fn_name, argType, argTypesLen);
-    if (index != -1 && DataBase[index].server_address == server_address
+    if (index != SERVER_FN_NOT_FOUND && DataBase[index].server_address == server_address
             && DataBase[index].port == port)
     {
         //over write
+        result = DUPLICATE_FN;
+        DataBase[index].server_address = server_address;
+        DataBase[index].port = port;
         DataBase[index].fn_name = fn_name;
         DataBase[index].argType = argType;
         DataBase[index].argTypesLen = argTypesLen;
+        DataBase[index].server_socket_fd = socketfd;
+        send(socketfd, &result, sizeof(result), 0);
+        return DUPLICATE_FN;
     }
     else
     {
+        result = SUCCESS;
         data_point a;
         a.server_address = server_address;
         a.port = port;
@@ -127,106 +128,71 @@ void binder_register(int socketfd, int msglen)
         a.argTypesLen = argTypesLen;
         a.server_socket_fd = socketfd;
         DataBase.push_back(a);
-
-        cout << "address: " << DataBase.back().server_address << endl;
-        cout << "port: " << DataBase.back().port << endl;
-        cout << "fn name: " << DataBase.back().fn_name << endl;
-        cout << "serverfd: " << DataBase.back().server_socket_fd << endl;
-        for (int j = 0; j < DataBase.back().argTypesLen / sizeof(int); j++)
-        {
-            cout << "argTypeLen: " << DataBase.back().argTypesLen << endl;
-            cout << "argType[" << j << "]=" << DataBase.back().argType[j]
-                    << endl;
-        }
+        send(socketfd, &result, sizeof(result), 0);
+        return SUCCESS;
     }
-    send(socketfd, &success, sizeof(success), 0);
 }
 
-void binder_service_client(int socketfd, int msglen)
+int binder_service_client(int socketfd, int msglen)
 {
-    cout << "binder lookup" << endl;
     int success = SUCCESS;
     char fn_name[MAXFNNAME + 1];
     int argTypesLen = msglen - sizeof(fn_name); //yes
     unsigned int* argType = (unsigned int*) malloc(argTypesLen);
 
     //receive the message
-    int checksum = msglen;
-    checksum -= recv(socketfd, fn_name, sizeof(fn_name), 0);
-    checksum -= recv(socketfd, argType, argTypesLen, 0);
+    recv(socketfd, fn_name, sizeof(fn_name), 0);
+    recv(socketfd, argType, argTypesLen, 0);
 
-    if (checksum == 0)
+    int found = FAILURE;
+
+    int index_found = -1;
+    //lookup returns the index of found
+    index_found = database_lookup((string) fn_name, argType, argTypesLen);
+
+    if (index_found != SERVER_FN_NOT_FOUND)
     {
-        cout << "binder side (got request): fn request: " << fn_name << endl;
+        //SERVER FUNCTION FOUND
+        const char* server_address =
+                DataBase[index_found].server_address.c_str();
+        int port = DataBase[index_found].port;
+        int sendmsglen = MAXHOSTNAME+sizeof(char) + sizeof(port);
+        int sendmsgtype = LOC_SUCCESS;
 
-        for (int j = 0; j < argTypesLen / sizeof(int); j++)
-        {
-            cout << "binder side (got request):argType[" << j << "]="
-                    << argType[j] << endl;
-        }
+        send(socketfd, &sendmsglen, sizeof(sendmsglen), 0);
+        send(socketfd, &sendmsgtype, sizeof(sendmsgtype), 0);
+        send(socketfd, server_address, MAXHOSTNAME + 1, 0);
+        send(socketfd, &port, sizeof(port), 0);
 
-        int found = FAILURE;
-
-        int index_found = -1;
-        //lookup returns the index of found
-        index_found = database_lookup((string) fn_name, argType, argTypesLen);
-
-        if (index_found != FAILURE)
-        {
-            cout << "SERVER FUNCTION FOUND" << endl;
-            const char* server_address =
-                    DataBase[index_found].server_address.c_str();
-            int port = DataBase[index_found].port;
-            int sendmsglen = MAXHOSTNAME+sizeof(char) + sizeof(port);
-            int sendmsgtype = LOC_SUCCESS;
-            int sendchecksum = sendmsglen + sizeof(sendmsgtype)
-                    + sizeof(sendmsglen);
-
-            sendchecksum -= send(socketfd, &sendmsglen, sizeof(sendmsglen), 0);
-            sendchecksum
-                    -= send(socketfd, &sendmsgtype, sizeof(sendmsgtype), 0);
-            sendchecksum -= send(socketfd, server_address, MAXHOSTNAME + 1, 0);
-            sendchecksum -= send(socketfd, &port, sizeof(port), 0);
-            cout << "msglen: " << sendmsglen << endl;
-            cout << "sendmsgtype: " << sendmsgtype << endl;
-            cout << "address: " << server_address << endl;
-            cout << "port: " << port << endl;
-
-            //put the serviced function to the end
-            data_point temp;
-            temp.fn_name = DataBase[index_found].fn_name;
-            temp.server_address = DataBase[index_found].server_address;
-            temp.port = DataBase[index_found].port;
-            temp.server_socket_fd = DataBase[index_found].server_socket_fd;
-            temp.argType = DataBase[index_found].argType;
-            temp.argTypesLen = DataBase[index_found].argTypesLen;
-            DataBase.erase(DataBase.begin() + index_found);
-            DataBase.push_back(temp);
-
-            if (checksum != 0)
-            {
-                cout << "Error sending back LOC SUCCESS" << endl;
-            }
-
-        }
-        else
-        {
-            cout << "SERVER FUNCTION NOT FOUND" << endl;
-            int msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
-            int msgtype = LOC_FAILURE;
-            int reasonCode = FAILURE;
-            int checksum = msglen + sizeof(msgtype) + sizeof(msglen);
-            send(socketfd, &msglen, sizeof(msglen), 0);
-            send(socketfd, &msgtype, sizeof(msgtype), 0);
-            send(socketfd, &reasonCode, sizeof(reasonCode), 0);
-        }
+        //put the serviced function to the end
+        data_point temp;
+        temp.fn_name = DataBase[index_found].fn_name;
+        temp.server_address = DataBase[index_found].server_address;
+        temp.port = DataBase[index_found].port;
+        temp.server_socket_fd = DataBase[index_found].server_socket_fd;
+        temp.argType = DataBase[index_found].argType;
+        temp.argTypesLen = DataBase[index_found].argTypesLen;
+        DataBase.erase(DataBase.begin() + index_found);
+        DataBase.push_back(temp);
+        return SUCCESS;
+    }
+    else
+    {
+        //SERVER FUNCTION NOT FOUND
+        int msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
+        int msgtype = SERVER_FN_NOT_FOUND;
+        int reasonCode = FAILURE;
+        send(socketfd, &msglen, sizeof(msglen), 0);
+        send(socketfd, &msgtype, sizeof(msgtype), 0);
+        send(socketfd, &reasonCode, sizeof(reasonCode), 0);
+        return SERVER_FN_NOT_FOUND;
     }
 }
 
 //main function
 int main()
 {
-    printf("binder\n");
+    //printf("binder\n");
 
     fd_set master; // master file descriptor list
     fd_set read_fds; // temp file descriptor list for select()
@@ -262,12 +228,9 @@ int main()
             if (FD_ISSET(socketfd, &read_fds))
             {
                 // we got one!!
-                printf("we got one! i:%i\n", socketfd);
                 if (socketfd == listener)
                 {
-                    printf("i is listener\n");
                     newfd = accept(listener, NULL, NULL);
-                    cout << newfd << " is new socket" << endl;
 
                     if (newfd == -1)
                     {
@@ -297,8 +260,6 @@ int main()
                     //check msgtype to see if from server
                     if (msgtype == REGISTER && status > 0)
                     {
-                        cout << endl << endl << "-------accept fn reg calls-----"
-                                << endl << endl;
                         binder_register(socketfd, msglen);
                         for (int i=0; i< SocketDataBase.size(); i++)
                         {
@@ -310,15 +271,11 @@ int main()
                     }
                     else if (msgtype == LOC_REQUEST && status > 0)
                     {
-                        cout << endl << endl << "-------accept fn loc calls-----"
-                              << endl << endl;
                         binder_service_client(socketfd, msglen);
                     }
                     else if (msgtype == TERMINATE && status > 0)
                     {
-                        printf("got terminate message\n");
                         terminate_server();
-                        printf("sent terminate message to server complete\n");
                     }
 
                     if (status <= 0)
@@ -326,12 +283,8 @@ int main()
                         //get rid of the datapoint if socketfd is in the database of servers
                         for (int i = 0; i < DataBase.size(); i++)
                         {
-                          cout << "this is what's still in the database: " << DataBase[i].server_socket_fd << " fn name: " << DataBase[i].fn_name << endl;
                             if (DataBase[i].server_socket_fd == socketfd)
                             {
-                                cout << "Removing following fns in Binder Database" << endl;
-                                cout << DataBase[i].fn_name << endl;
-                                cout << DataBase[i].server_socket_fd << endl;
                                 DataBase.erase(DataBase.begin() + i);
                                 i--;
                             }
@@ -341,17 +294,12 @@ int main()
                         {
                           if (SocketDataBase[i] == socketfd)
                           {
-                              cout << "socketDatabase size: " << SocketDataBase.size() << endl;
-                              cout << "Removing following sockets in Binder socketDatabase:" << endl;
-                              cout << SocketDataBase[i] << endl;
                               SocketDataBase.erase(SocketDataBase.begin() + i);
                               i--;
                           }
                         }
-                        cout << "terminating:" << socketfd << endl;
                         close(socketfd); // bye!
                         FD_CLR(socketfd, &master); // remove from master seta
-                        cout << "SocketDataBase.size() : " << SocketDataBase.size() << endl;
                         if(terminate_flag == 1 && SocketDataBase.size() == 0)
                           exit(0);
                     }

@@ -40,7 +40,7 @@ enum message_type
 //error codes - negative
 enum error_code
 {
-    ESTABLISH_ERROR=-10,
+    ESTABLISH_ERROR=-11,
     CALLSOCKET_ERROR,
     SERVER_NOT_FOUND,
     BINDER_NOT_FOUND,
@@ -48,13 +48,14 @@ enum error_code
     REGISTER_FAIL,
     SEND_ERROR,
     RECV_ERROR,
-    THREAD_ERROR
+    THREAD_ERROR,
+    SERVER_FN_NOT_FOUND
 };
 
 //warning codes - positive
 enum warning_code
 {
-    DUPLICATE_FN=1,
+    DUPLICATE_FN=-2,
     TEST
 };
 
