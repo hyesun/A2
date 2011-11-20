@@ -1,4 +1,4 @@
-all: client server binder
+all: binder
 
 client: client.o rpc.o 
 	g++ -g -o0 -Wall -Wl,--no-as-needed -pthread client.o librpc.a -o client

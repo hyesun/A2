@@ -302,7 +302,7 @@ int call_socket(char *hostname, int portnum)
 
 int rpcInit() //called by server
 {
-    printf("rpcInit\n");
+    //printf("rpcInit\n");
 
     //create connection socket for client
     clientfd = establish(SPORT, 0);
@@ -320,13 +320,13 @@ int rpcInit() //called by server
     if (binderfd < 0)
         return CALLSOCKET_ERROR;
 
-    printf("rpcInit done\n");
+    //printf("rpcInit done\n");
     return SUCCESS;
 }
 
 int rpcCall(char* name, int* argTypes, void** args) //called by client
 {
-    printf("rpcCall\n");
+    //printf("rpcCall\n");
 
     //server info
     char server_address[MAXHOSTNAME + 1];
@@ -377,7 +377,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     }
     else
     {
-        printf("ERROR in rpcCall()\n");
+        //printf("ERROR in rpcCall()\n");
         return FAILURE;
     }
 
@@ -443,19 +443,20 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     }
     else //what happened??
     {
-        printf("rpcCall error\n");
+        //printf("rpcCall error\n");
+        return FAILURE;
     }
 
     //done with server
     close(serverfd);
 
-    printf("rpcCall done\n");
+    //printf("rpcCall done\n");
     return SUCCESS;
 }
 
 int rpcRegister(char* name, int* argTypes, skeleton f) //server calls
 {
-    printf("rpcRegister\n");
+    //printf("rpcRegister\n");
 
     int result;
 
@@ -505,7 +506,6 @@ int rpcRegister(char* name, int* argTypes, skeleton f) //server calls
     }
     else if (msgtype == REGISTER_WARNING)
     {
-        printf("dup func\n");
         result = DUPLICATE_FUNCTION;
     }
     else
@@ -513,7 +513,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f) //server calls
         result = REGISTER_FAIL;
     }
 
-    printf("rpcRegister done\n");
+    //printf("rpcRegister done\n");
     return result;
 }
 
@@ -622,7 +622,7 @@ void* serveClientRequest(void* newsockfdptr)
     }
     else //what happened??
     {
-        printf("rpcExecute error\n");
+        //printf("rpcExecute error\n");
     }
 
     //bye client
@@ -686,7 +686,7 @@ void* listenForTerminate(void *arg)
 
 int rpcExecute()
 {
-    printf("rpcExecute\n");
+    //printf("rpcExecute\n");
 
     //create threads on stack
     pthread_t listener, getRequest;
@@ -716,13 +716,13 @@ int rpcExecute()
     //bye binder
     close(binderfd);
 
-    printf("rpcExecute done\n");
+    //printf("rpcExecute done\n");
     return SUCCESS;
 }
 
 int rpcTerminate()
 {
-    printf("rpcTerminate\n");
+    //printf("rpcTerminate\n");
 
     //prepare message
     int msgtype = TERMINATE;
@@ -744,6 +744,6 @@ int rpcTerminate()
     //bye binder
     close(binderfd);
 
-    printf("rpcTerminate done\n");
+    //printf("rpcTerminate done\n");
     return SUCCESS;
 }
