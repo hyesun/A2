@@ -513,6 +513,7 @@ void* serveClientRequest(void* newsockfdptr)
     //prepare argTypes array
     int argsCumulativeSize = msglen - sizeof(fn_name);
     int *argsCumulative = (int*) malloc(argsCumulativeSize);
+    //int *argsCumulative = new
 
     //read main message
     recv(newsockfd, fn_name, sizeof(fn_name), 0);
