@@ -646,14 +646,6 @@ void* listenForTerminate(void *arg)
 
             //set this flag on to let main thread know we're getting ready to die
             die = 1;
-            msgtype = TERMINATE_SUCCESS;
-
-            //set a terminate response here?
-            send(binderfd, &msglen, sizeof(msglen), 0);
-            send(binderfd, &msgtype, sizeof(msgtype), 0);
-
-            //bye binder
-            close(binderfd);
 
             //this thread is done
             threadDec();
@@ -692,6 +684,16 @@ int rpcExecute()
         //thread1: this thread - this stays up
         //thread2: getRequest thread - this also stays up
     }
+
+    //set a terminate response to binder
+    int msglen = 0; //doesn't matter
+    int msgtype = TERMINATE_SUCCESS;
+
+    send(binderfd, &msglen, sizeof(msglen), 0);
+    send(binderfd, &msgtype, sizeof(msgtype), 0);
+
+    //bye binder
+    close(binderfd);
 
     printf("rpcExecute done\n");
     return SUCCESS;
