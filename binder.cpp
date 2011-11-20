@@ -41,17 +41,17 @@ int terminate_server()
     int msgtype=TERMINATE;
     int recvmsglen=0;
     int recvmsgtype = -1;
+    terminate_flag = 1;
     for (int i=0; i < SocketDataBase.size(); i++)
     {
       serverfd = SocketDataBase[i];
       send(serverfd, &msglen, sizeof(msglen), 0);
       send(serverfd, &msgtype, sizeof(msgtype), 0);
+      recv(serverfd, &msglen, sizeof(msglen), 0);
+      recv(serverfd, &recvmsgtype, sizeof(recvmsgtype),0);
+      if(recvmsgtype != TERMINATE_SUCCESS)
+          terminate_flag = 0;
     }
-    recv(serverfd, &msglen, sizeof(msglen), 0);
-    recv(serverfd, &recvmsgtype, sizeof(recvmsgtype),0);
-    if(TERMINATE_SUCCESS)
-      terminate_flag = 1;
-
     return 0;
 }
 
