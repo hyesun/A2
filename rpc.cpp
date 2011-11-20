@@ -40,7 +40,10 @@ enum message_type
 //error codes - negative
 enum error_code
 {
-    ESTABLISH_ERROR=-11,
+    ARG_ARRAY_TOO_LONG = -14,
+    ARG_TYPES_MISMATCH,
+    OUTPUT_INPUT_MISMATCH,
+    ESTABLISH_ERROR,
     CALLSOCKET_ERROR,
     SERVER_NOT_FOUND,
     BINDER_NOT_FOUND,

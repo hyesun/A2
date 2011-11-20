@@ -71,11 +71,11 @@ int database_lookup(string fn_name, unsigned int* argType, int argTypesLen)
                 {
                     //compare output/input
                     if(argType[j] >> 30 != DataBase[index_found].argType[j] >> 30)
-                        arg_types_match = FAILURE;
+                        arg_types_match = OUTPUT_INPUT_MISMATCH;
                     if (getArgType((int*)(argType+j)) != getArgType((int*)(DataBase[index_found].argType+j)))
-                        arg_types_match = FAILURE;
+                        arg_types_match = ARG_TYPES_MISMATCH;
                     if (getArgType((int*)(argType+j)) > getArgType((int*)(DataBase[index_found].argType+j)))
-                        arg_types_match = FAILURE;
+                        arg_types_match = ARG_ARRAY_TOO_LONG;
                 }
                 if (arg_types_match == SUCCESS)
                     return index_found;
@@ -180,7 +180,7 @@ int binder_service_client(int socketfd, int msglen)
     {
         //SERVER FUNCTION NOT FOUND
         int msglen = MAXFNNAME+sizeof(char) + argTypesLen*sizeof(int);
-        int msgtype = SERVER_FN_NOT_FOUND;
+        int msgtype = LOC_FAILURE;
         int reasonCode = FAILURE;
         send(socketfd, &msglen, sizeof(msglen), 0);
         send(socketfd, &msgtype, sizeof(msgtype), 0);
