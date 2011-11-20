@@ -45,15 +45,34 @@ typedef struct
 
 //global variables
 int die = 0;
-int binderfd;
-int clientfd;
 int server_port;
+int binderfd, clientfd;
 char server_address[MAXHOSTNAME+1];
-vector<dataentry> database; //server's database of its functions
+
+//server's database of its functions
+vector<dataentry> database;
+
+//thread info
+int threadcount = 1;
+pthread_mutex_t mutexsum;
 
 //================================================================
 //  HELPER FUNCTIONS
 //================================================================
+
+void threadDec()
+{
+    pthread_mutex_lock (&mutexsum);
+    threadcount--;
+    pthread_mutex_unlock (&mutexsum);
+}
+
+void threadInc()
+{
+    pthread_mutex_lock (&mutexsum);
+    threadcount++;
+    pthread_mutex_unlock (&mutexsum);
+}
 
 int lenOfArgTypes(int* argTypes)
 {
@@ -272,7 +291,7 @@ int rpcInit()   //called by server
     char* binder_address = getenv("BINDER_ADDRESS");
     int binder_port= atoi(getenv("BINDER_PORT"));
 
-    //connect to the binder
+    //connect to the binder - this stays OPEN until the server terminates
     binderfd=call_socket(binder_address, binder_port);
     if (binderfd < 0)
     {
@@ -476,121 +495,136 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
     return SUCCESS;
 }
 
+void* serveClientRequest(void* newsockfdptr)
+{
+    //declare
+    int msglen, msgtype;
+    char fn_name[MAXFNNAME+1];
+    int newsockfd = *(int*)newsockfdptr;
+
+    //================================================================
+    //RECV FROM CLIENT
+    //================================================================
+
+    //read length and type
+    recv(newsockfd, &msglen, sizeof(msglen), 0);
+    recv(newsockfd, &msgtype, sizeof(msgtype), 0);
+
+    //prepare argTypes array
+    int argsCumulativeSize = msglen - sizeof(fn_name);
+    int *argsCumulative = (int*) malloc(argsCumulativeSize);
+
+    //read main message
+    recv(newsockfd, fn_name, sizeof(fn_name), 0);
+    recv(newsockfd, argsCumulative, argsCumulativeSize, MSG_WAITALL);
+
+    //================================================================
+    //UNPACK ARGSCUMULATIVE
+    //================================================================
+
+    //first, see how many args there are
+    int argTypesLen = lenOfArgTypes(argsCumulative);
+
+    //figure out argTypes
+    int *argTypes = (int*) malloc(argTypesLen * sizeof(int));
+    memcpy(argTypes, argsCumulative, argTypesLen * sizeof(int));
+
+    //figure out args
+    int argsSize = argsCumulativeSize - argTypesLen * sizeof(int); //in bytes
+    void** args = (void**) malloc((argTypesLen - 1) * sizeof(void*));
+    void* argsIndex = argsCumulative + argTypesLen; //point to the correct place
+
+    for (int i = 0; i < argTypesLen - 1; i++)
+    {
+        //see what type/len of arg we're dealing with
+        int arg_type = getArgType(argTypes + i);
+        int arg_type_size = sizeOfType(arg_type);
+        int arr_size = getArgLen(argTypes + i);
+
+        //temp holder
+        void* args_holder = (void*) malloc(arr_size * arg_type_size);
+
+        //copy the address
+        *(args + i) = args_holder;
+
+        //copy the contents of array into temp holder
+        for (int j = 0; j < arr_size; j++)
+        {
+            void* temp = (char*) args_holder + j * arg_type_size;
+            memcpy(temp, argsIndex, arg_type_size);
+            argsIndex = (void*) ((char*) argsIndex + arg_type_size);
+        }
+    }
+
+    //================================================================
+    //SEND TO SKELETON FUNCTION
+    //================================================================
+
+    int executionResult = FAILURE;
+    for (int i = 0; i < database.size(); i++)
+    {
+        string a = database[i].fn_name;
+        string b = fn_name;
+        if (a == b) //look for the function name
+        {
+            executionResult = database[i].fn_skel(argTypes, args);
+        }
+    }
+
+    //================================================================
+    //SEND THE RESULTS BACK TO CLIENT
+    //================================================================
+
+    if (executionResult == SUCCESS)
+    {
+        msgtype = EXECUTE_SUCCESS;
+        send(newsockfd, &msglen, sizeof(msglen), 0);
+        send(newsockfd, &msgtype, sizeof(msgtype), 0);
+        send(newsockfd, fn_name, sizeof(fn_name), 0);
+        send(newsockfd, argTypes, argTypesLen * sizeof(int), 0);
+        for (int i = 0; i < argTypesLen - 1; i++) //for each argument
+        {
+            int argTypeSize = sizeOfType(getArgType(argTypes + i)); //in bytes
+            int argLen = getArgLen(argTypes + i); //arg array length
+            send(newsockfd, args[i], argTypeSize * argLen, 0);
+        }
+    }
+    else if (executionResult == FAILURE)
+    {
+        //send error code back
+        msgtype = EXECUTE_FAILURE;
+        int reasonCode = executionResult;
+        send(newsockfd, &msglen, sizeof(msglen), 0);
+        send(newsockfd, &msgtype, sizeof(msgtype), 0);
+        send(newsockfd, &reasonCode, sizeof(reasonCode), 0);
+    }
+    else //what happened??
+    {
+        printf("rpcExecute error\n");
+    }
+
+    //bye client
+    close(newsockfd);
+
+    //the thread has finished its service to the client. it should die now.
+    threadDec();
+    pthread_exit(NULL);
+}
+
 void* getClientRequest(void* arg)
 {
     while (1)
     {
-        //declare
-        int msglen, msgtype;
-        char fn_name[MAXFNNAME+1];
-
-        //================================================================
-        //RECV FROM CLIENT
-        //================================================================
-
-        //wait for client to call my socket
+        //wait for client to call my socket - THIS BLOCKS!
         int newsockfd = get_connection(clientfd);
 
-        //read length and type
-        recv(newsockfd, &msglen, sizeof(msglen), 0);
-        recv(newsockfd, &msgtype, sizeof(msgtype), 0);
-
-        //prepare argTypes array
-        int argsCumulativeSize = msglen - sizeof(fn_name);
-        int *argsCumulative = (int*) malloc(argsCumulativeSize);
-
-        //read main message
-        recv(newsockfd, fn_name, sizeof(fn_name), 0);
-        recv(newsockfd, argsCumulative, argsCumulativeSize, MSG_WAITALL);
-
-        //================================================================
-        //UNPACK ARGSCUMULATIVE
-        //================================================================
-
-        //first, see how many args there are
-        int argTypesLen = lenOfArgTypes(argsCumulative);
-
-        //figure out argTypes
-        int *argTypes = (int*) malloc(argTypesLen * sizeof(int));
-        memcpy(argTypes, argsCumulative, argTypesLen * sizeof(int));
-
-        //figure out args
-        int argsSize = argsCumulativeSize - argTypesLen * sizeof(int); //in bytes
-        void** args = (void**) malloc((argTypesLen - 1) * sizeof(void*));
-        void* argsIndex = argsCumulative + argTypesLen; //point to the correct place
-
-        for (int i = 0; i < argTypesLen - 1; i++)
+        //got a connection - give this to a new thread to take care of it
+        pthread_t thread;
+        threadInc();
+        if(pthread_create(&thread, NULL, serveClientRequest, (void*)&newsockfd))
         {
-            //see what type/len of arg we're dealing with
-            int arg_type = getArgType(argTypes + i);
-            int arg_type_size = sizeOfType(arg_type);
-            int arr_size = getArgLen(argTypes + i);
-
-            //temp holder
-            void* args_holder = (void*) malloc(arr_size * arg_type_size);
-
-            //copy the address
-            *(args + i) = args_holder;
-
-            //copy the contents of array into temp holder
-            for (int j = 0; j < arr_size; j++)
-            {
-                void* temp = (char*) args_holder + j * arg_type_size;
-                memcpy(temp, argsIndex, arg_type_size);
-                argsIndex = (void*) ((char*) argsIndex + arg_type_size);
-            }
-        }
-
-        //================================================================
-        //SEND TO SKELETON FUNCTION
-        //================================================================
-
-        int executionResult = FAILURE;
-        for (int i = 0; i < database.size(); i++)
-        {
-            string a = database[i].fn_name;
-            string b = fn_name;
-            if (a == b) //look for the function name
-            {
-                executionResult = database[i].fn_skel(argTypes, args);
-            }
-        }
-
-        //================================================================
-        //SEND THE RESULTS BACK TO CLIENT
-        //================================================================
-
-        if (executionResult == SUCCESS)
-        {
-            msgtype = EXECUTE_SUCCESS;
-            send(newsockfd, &msglen, sizeof(msglen), 0);
-            send(newsockfd, &msgtype, sizeof(msgtype), 0);
-            send(newsockfd, fn_name, sizeof(fn_name), 0);
-            send(newsockfd, argTypes, argTypesLen * sizeof(int), 0);
-            for (int i = 0; i < argTypesLen - 1; i++) //for each argument
-            {
-                int argTypeSize = sizeOfType(getArgType(argTypes + i)); //in bytes
-                int argLen = getArgLen(argTypes + i); //arg array length
-                send(newsockfd, args[i], argTypeSize * argLen, 0);
-            }
-        }
-        else if (executionResult == FAILURE)
-        {
-            //send error code back
-            msgtype = EXECUTE_FAILURE;
-            int reasonCode = executionResult;
-            send(newsockfd, &msglen, sizeof(msglen), 0);
-            send(newsockfd, &msgtype, sizeof(msgtype), 0);
-            send(newsockfd, &reasonCode, sizeof(reasonCode), 0);
-        }
-        else //what happened??
-        {
-            printf("rpcExecute error\n");
-        }
-        if(die == 1)
-        {
-            printf("terminating client request thread\n");
-            exit(0);
+            printf("ERROR creating thread %d", 1);
+            exit(-1);
         }
     }
 }
@@ -607,13 +641,21 @@ void* listenForTerminate(void *arg)
 
         if (msgtype == TERMINATE)
         {
-            printf("terminate received\n");
-            die = 1;    //set this flag on
-            exit(0);
-        }
-        printf("listening\n");
-    }
+            printf("terminate signal received\n");
 
+            //set this flag on to let main thread know we're getting ready to die
+            die = 1;
+
+            //set a terminate response here?
+
+            //bye binder
+            close(binderfd);
+
+            //this thread is done
+            threadDec();
+            pthread_exit(NULL);
+        }
+    }
 }
 
 int rpcExecute()
@@ -621,26 +663,30 @@ int rpcExecute()
     printf("rpcExecute\n");
 
     //create threads on stack
-    pthread_t thread[NUMTHREADS];
-    pthread_mutex_t mutexsum;
-    pthread_attr_t attr;
+    pthread_t listener, getRequest;
 
-    //initialize and set thread detached attribute
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-    //listenForTerminate
-    if(pthread_create(&thread[0], &attr, listenForTerminate, NULL))
+    //make a thread for listening
+    threadInc();
+    if(pthread_create(&listener, NULL, listenForTerminate, NULL))
     {
         printf("ERROR creating thread %d", 1);
         exit(-1);
     }
 
-    //getClientRequest
-    if(pthread_create(&thread[1], &attr, getClientRequest, NULL))
+    //make a thread for picking up client connection calls
+    threadInc();
+    if(pthread_create(&getRequest, NULL, getClientRequest, NULL))
     {
         printf("ERROR creating thread %d", 0);
         exit(-1);
+    }
+
+    //loop until we get terminate signal and all service threads are done
+    while(die!=1 || threadcount > 2)
+    {
+        //when threadcount == 2 we can exit because:
+        //thread1: this thread - this stays up
+        //thread2: getRequest thread - this also stays up
     }
 
     printf("rpcExecute done\n");
