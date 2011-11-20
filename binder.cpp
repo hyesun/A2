@@ -39,13 +39,19 @@ int terminate_server()
     int serverfd;
     int msglen=0;
     int msgtype=TERMINATE;
+    int recvmsglen=0;
+    int recvmsgtype = -1;
+    terminate_flag = 1;
     for (int i=0; i < SocketDataBase.size(); i++)
     {
       serverfd = SocketDataBase[i];
       send(serverfd, &msglen, sizeof(msglen), 0);
       send(serverfd, &msgtype, sizeof(msgtype), 0);
+      recv(serverfd, &msglen, sizeof(msglen), 0);
+      recv(serverfd, &recvmsgtype, sizeof(recvmsgtype),0);
+      if(recvmsgtype != TERMINATE_SUCCESS)
+          terminate_flag = 0;
     }
-
     return 0;
 }
 
@@ -305,7 +311,6 @@ int main()
                     else if (msgtype == TERMINATE && status > 0)
                     {
                         printf("got terminate message\n");
-                        terminate_flag = 1;
                         terminate_server();
                         printf("sent terminate message to server complete\n");
                     }
