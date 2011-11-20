@@ -280,10 +280,6 @@ int main()
                         cout << endl << endl << "-------accept fn reg calls-----"
                                 << endl << endl;
                         binder_register(socketfd, msglen);
-                        for (int j = 0; j < DataBase.size(); j++)
-                        {
-                            cout << "Port: " << DataBase[j].port << endl;
-                        }
                         SocketDataBase.push_back(socketfd);
                     }
                     else if (msgtype == LOC_REQUEST)
