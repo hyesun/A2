@@ -12,16 +12,16 @@ using namespace std;
 #include <string>
 #include <strings.h>
 #include <pthread.h>
+#include <stdexcept>
 #include "rpc.h"
 
 #define BACKLOG 50       //max # of queued connects
-#define MAXHOSTNAME 30  //"hyesun-ubuntu"
+#define MAXHOSTNAME 50  //"hyesun-ubuntu"
 #define MAXFNNAME 50    //"f0"
 #define SUCCESS  0
 #define FAILURE -1
 #define BPORT   0
 #define SPORT   0
-#define NUMTHREADS 5
 
 //message types
 enum message_type
@@ -35,6 +35,27 @@ enum message_type
     EXECUTE_FAILURE,
     TERMINATE,
     TERMINATE_SUCCESS
+};
+
+//error codes - negative
+enum error_code
+{
+    ESTABLISH_ERROR=-10,
+    CALLSOCKET_ERROR,
+    SERVER_NOT_FOUND,
+    BINDER_NOT_FOUND,
+    EXECUTION_ERROR,
+    REGISTER_FAIL,
+    SEND_ERROR,
+    RECV_ERROR,
+    THREAD_ERROR
+};
+
+//warning codes - positive
+enum warning_code
+{
+    DUPLICATE_FN=1,
+    TEST
 };
 
 //local database for server
@@ -60,6 +81,22 @@ pthread_mutex_t mutexsum;
 //================================================================
 //  HELPER FUNCTIONS
 //================================================================
+
+void send_safe(int sockfd, const void *msg, int len, int flags)
+{
+    if (send(sockfd, msg, len, flags) != len)
+    {
+        throw SEND_ERROR;
+    }
+}
+
+void recv_safe(int sockfd, void *buf, int len, int flags)
+{
+    if (recv(sockfd, buf, len, flags) != len)
+    {
+        throw RECV_ERROR;
+    }
+}
 
 void threadDec()
 {
@@ -283,22 +320,18 @@ int rpcInit()   //called by server
     //create connection socket for client
     clientfd = establish(SPORT, 0);
     if (clientfd < 0)
-    {
-        printf("establish error: %i\n", clientfd);
-        return clientfd;
-    }
+        return ESTABLISH_ERROR;
 
     //open a connection to binder, for sending register request. keep this open
     char* binder_address = getenv("BINDER_ADDRESS");
     int binder_port= atoi(getenv("BINDER_PORT"));
+    if(binder_address==NULL || binder_port<=0)
+        return BINDER_NOT_FOUND;
 
     //connect to the binder - this stays OPEN until the server terminates
     binderfd=call_socket(binder_address, binder_port);
     if (binderfd < 0)
-    {
-        printf("call socket error: %i\n", binderfd);
-        return binderfd;
-    }
+        return CALLSOCKET_ERROR;
 
     printf("rpcInit done\n");
     return SUCCESS;
@@ -315,6 +348,8 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     //binder info
     char* binder_address = getenv("BINDER_ADDRESS");
     int binder_port= atoi(getenv("BINDER_PORT"));
+    if(binder_address==NULL || binder_port<=0)
+        return BINDER_NOT_FOUND;
 
     //================================================================
     //SEND BINDER LOC_REQUEST
@@ -323,10 +358,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     //connect to binder
     binderfd=call_socket(binder_address, binder_port);
     if (binderfd < 0)
-    {
-        printf("call socket error: %i\n", binderfd);
-        return binderfd;
-    }
+        return CALLSOCKET_ERROR;
 
     //get message info ready
     int argTypesLen = lenOfArgTypes(argTypes);
@@ -373,10 +405,7 @@ int rpcCall(char* name, int* argTypes, void** args) //called by client
     //connect to server
     int serverfd=call_socket(server_address, server_port);
     if (serverfd < 0)
-    {
-        printf("call socket error: %i\n", serverfd);
-        return serverfd;
-    }
+        return CALLSOCKET_ERROR;
 
     //get message info ready
     int argLenByte = sizeOfArgs(argTypes);    //count how long args is
@@ -478,10 +507,7 @@ int rpcRegister(char* name, int* argTypes, skeleton f)  //server calls
     recv(binderfd, &reply, sizeof(reply), 0);
 
     if(reply != SUCCESS)
-    {
-        printf("ERROR in rpcRegister()\n");
-        return FAILURE;
-    }
+        return REGISTER_FAIL;
 
     //================================================================
     //RECORD THE FUNCTION IN DATABASE
@@ -673,18 +699,12 @@ int rpcExecute()
     //make a thread for listening
     threadInc();
     if(pthread_create(&listener, NULL, listenForTerminate, NULL))
-    {
-        printf("ERROR creating thread %d", 1);
-        exit(-1);
-    }
+        return THREAD_ERROR;
 
     //make a thread for picking up client connection calls
     threadInc();
     if(pthread_create(&getRequest, NULL, getClientRequest, NULL))
-    {
-        printf("ERROR creating thread %d", 0);
-        exit(-1);
-    }
+        return THREAD_ERROR;
 
     //loop until we get terminate signal and all service threads are done
     while(die!=1 || threadcount > 2)
@@ -697,7 +717,6 @@ int rpcExecute()
     //set a terminate response to binder
     int msglen = 0; //doesn't matter
     int msgtype = TERMINATE_SUCCESS;
-
     send(binderfd, &msglen, sizeof(msglen), 0);
     send(binderfd, &msgtype, sizeof(msgtype), 0);
 
@@ -719,14 +738,13 @@ int rpcTerminate()
     //open a connection to binder, for sending register request. keep this open
     char* binder_address = getenv("BINDER_ADDRESS");
     int binder_port= atoi(getenv("BINDER_PORT"));
+    if(binder_address==NULL || binder_port<=0)
+        return BINDER_NOT_FOUND;
 
     //connect to the binder
     binderfd=call_socket(binder_address, binder_port);
     if (binderfd < 0)
-    {
-        printf("call socket error: %i\n", binderfd);
-        return binderfd;
-    }
+        return CALLSOCKET_ERROR;
 
     //send it to binder
     send(binderfd, &msglen, sizeof(msglen), MSG_WAITALL);
